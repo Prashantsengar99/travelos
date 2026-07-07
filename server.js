@@ -4,10 +4,22 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const path = require('path'); // ✅ IMPORTANT - Upar lao
 
 dotenv.config();
 
 const app = express();
+
+// ============ STATIC FILES SERVE ============
+// ✅ Ye code sabse upar aana chahiye
+app.use(express.static(path.join(__dirname)));
+
+// Serve index.html on root route
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ============ CORS ============
 app.use(cors({
     origin: '*',
     credentials: true
@@ -30,7 +42,7 @@ mongoose.connect(MONGODB_URI, {
 })
 .catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
-    process.exit(1);
+    // process.exit(1) hatana hai taaki server crash na ho
 });
 
 // ============ SCHEMAS (MODELS) ============
@@ -85,22 +97,17 @@ app.post('/api/auth/register', async (req, res) => {
             return res.status(400).json({ error: 'Password must be at least 6 characters' });
         }
         
-        // Check existing user
         const existing = await User.findOne({ email });
         if (existing) {
             return res.status(400).json({ error: 'Email already registered' });
         }
         
-        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Create user
         const user = new User({ name, email, password: hashedPassword });
         await user.save();
         
         console.log(`✅ New user registered: ${email}`);
         
-        // Generate token
         const token = jwt.sign(
             { id: user._id }, 
             process.env.JWT_SECRET || 'travelos_secret_key',
@@ -125,13 +132,11 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(400).json({ error: 'Email and password required' });
         }
         
-        // Find user
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        // Check password
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -139,7 +144,6 @@ app.post('/api/auth/login', async (req, res) => {
         
         console.log(`✅ User logged in: ${email}`);
         
-        // Generate token
         const token = jwt.sign(
             { id: user._id },
             process.env.JWT_SECRET || 'travelos_secret_key',
@@ -341,6 +345,79 @@ app.put('/api/packing/:tripId', auth, async (req, res) => {
     }
 });
 
+// ============ WEATHER API ============
+
+app.get('/api/weather/:city', async (req, res) => {
+    try {
+        const city = req.params.city;
+        const apiKey = process.env.WEATHER_API_KEY || 'your_api_key_here';
+        
+        const currentResponse = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`
+        );
+        
+        if (!currentResponse.ok) {
+            throw new Error('City not found');
+        }
+        
+        const currentData = await currentResponse.json();
+        
+        const forecastResponse = await fetch(
+            `https://api.openweathermap.org/data/2.5/forecast?q=${city}&appid=${apiKey}&units=metric`
+        );
+        
+        const forecastData = await forecastResponse.json();
+        
+        const dailyForecast = [];
+        const processedDays = new Set();
+        
+        forecastData.list.forEach(item => {
+            const date = new Date(item.dt * 1000);
+            const day = date.toISOString().split('T')[0];
+            
+            if (!processedDays.has(day) && dailyForecast.length < 5) {
+                processedDays.add(day);
+                dailyForecast.push({
+                    date: day,
+                    day: date.toLocaleDateString('en-IN', { weekday: 'short' }),
+                    temp_min: Math.round(item.main.temp_min),
+                    temp_max: Math.round(item.main.temp_max),
+                    description: item.weather[0].description,
+                    icon: item.weather[0].icon,
+                    humidity: item.main.humidity,
+                    wind_speed: Math.round(item.wind.speed * 3.6),
+                    pop: Math.round(item.pop * 100)
+                });
+            }
+        });
+        
+        res.json({
+            current: {
+                city: currentData.name,
+                country: currentData.sys.country,
+                temp: Math.round(currentData.main.temp),
+                feels_like: Math.round(currentData.main.feels_like),
+                description: currentData.weather[0].description,
+                icon: currentData.weather[0].icon,
+                humidity: currentData.main.humidity,
+                wind_speed: Math.round(currentData.wind.speed * 3.6),
+                pressure: currentData.main.pressure,
+                sunrise: new Date(currentData.sys.sunrise * 1000).toLocaleTimeString('en-IN'),
+                sunset: new Date(currentData.sys.sunset * 1000).toLocaleTimeString('en-IN'),
+                visibility: currentData.visibility / 1000
+            },
+            forecast: dailyForecast
+        });
+        
+    } catch (err) {
+        console.error('Weather API Error:', err.message);
+        res.status(500).json({ 
+            error: err.message,
+            message: 'Unable to fetch weather data' 
+        });
+    }
+});
+
 // ============ HEALTH CHECK ============
 
 app.get('/api/health', (req, res) => {
@@ -361,5 +438,6 @@ app.listen(PORT, () => {
     console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}`);
     console.log(`📊 Database: ${mongoose.connection.db?.databaseName || 'N/A'}`);
     console.log(`🔐 JWT: ${process.env.JWT_SECRET ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`🌐 Frontend: http://localhost:${PORT}`);
     console.log('='.repeat(50));
 });
