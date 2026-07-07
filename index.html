@@ -1,0 +1,2084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TravelOS — AI Travel Companion & Budget Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0B0D14;
+            --bg2: #11131C;
+            --card: #171A28;
+            --card-h: #1E2236;
+            --border: #252940;
+            --border-l: #303552;
+            --text: #E6E7EE;
+            --text2: #8B8DA0;
+            --text3: #555770;
+            --accent: #F5A623;
+            --accent-l: #FFD080;
+            --accent-d: #C78518;
+            --success: #22C55E;
+            --danger: #EF4444;
+            --warning: #F97316;
+            --info: #06B6D4;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); overflow: hidden; height: 100vh; }
+        h1,h2,h3,h4,h5,h6 { font-family: 'Outfit', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-l); }
+
+        /* Splash */
+        #splash { position: fixed; inset: 0; z-index: 9999; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; transition: opacity 0.6s, visibility 0.6s; }
+        #splash.hide { opacity: 0; visibility: hidden; }
+        .splash-logo { font-family: 'Outfit'; font-size: 3rem; font-weight: 900; background: linear-gradient(135deg, var(--accent), #FF6B35); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .splash-bar { width: 200px; height: 3px; background: var(--border); border-radius: 2px; margin-top: 24px; overflow: hidden; }
+        .splash-bar-inner { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #FF6B35); border-radius: 2px; animation: splashLoad 1.8s ease forwards; }
+        @keyframes splashLoad { to { width: 100%; } }
+
+        /* Layout */
+        .app { display: flex; height: 100vh; }
+        .sidebar { width: 260px; min-width: 260px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: all 0.3s; z-index: 50; }
+        .sidebar.collapsed { width: 72px; min-width: 72px; }
+        .sidebar.collapsed .nav-label, .sidebar.collapsed .logo-text, .sidebar.collapsed .user-info { display: none; }
+        .sidebar.collapsed .nav-item { justify-content: center; padding: 12px; }
+        .sidebar.collapsed .nav-icon { margin-right: 0; }
+        .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .topbar { height: 64px; min-height: 64px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; gap: 16px; }
+        .content { flex: 1; overflow-y: auto; padding: 24px; background: var(--bg); position: relative; }
+        .content::before { content: ''; position: fixed; top: -50%; right: -30%; width: 600px; height: 600px; background: radial-gradient(circle, rgba(245,166,35,0.04) 0%, transparent 70%); pointer-events: none; z-index: 0; }
+        .content > * { position: relative; z-index: 1; }
+
+        /* Nav */
+        .nav-item { display: flex; align-items: center; padding: 10px 16px; margin: 2px 8px; border-radius: 10px; cursor: pointer; transition: all 0.2s; color: var(--text2); font-size: 14px; font-weight: 500; }
+        .nav-item:hover { background: var(--card); color: var(--text); }
+        .nav-item.active { background: linear-gradient(135deg, rgba(245,166,35,0.15), rgba(255,107,53,0.08)); color: var(--accent); }
+        .nav-icon { width: 20px; text-align: center; margin-right: 12px; font-size: 15px; }
+
+        /* Cards */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: all 0.25s; }
+        .card:hover { border-color: var(--border-l); }
+        .card-glow { box-shadow: 0 0 40px rgba(245,166,35,0.05); }
+
+        /* Stat cards */
+        .stat-card { position: relative; overflow: hidden; }
+        .stat-card::after { content: ''; position: absolute; top: -30px; right: -30px; width: 80px; height: 80px; border-radius: 50%; opacity: 0.08; }
+        .stat-card.amber::after { background: var(--accent); }
+        .stat-card.red::after { background: var(--danger); }
+        .stat-card.green::after { background: var(--success); }
+        .stat-card.cyan::after { background: var(--info); }
+
+        /* Inputs */
+        .input-field { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; color: var(--text); font-family: 'DM Sans'; font-size: 14px; width: 100%; transition: border 0.2s; outline: none; }
+        .input-field:focus { border-color: var(--accent); }
+        .input-field::placeholder { color: var(--text3); }
+        select.input-field { cursor: pointer; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238B8DA0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px; }
+        select.input-field option { background: var(--card); color: var(--text); }
+
+        /* Buttons */
+        .btn { padding: 10px 20px; border-radius: 10px; font-family: 'DM Sans'; font-weight: 600; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), #FF6B35); color: #000; }
+        .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(245,166,35,0.3); }
+        .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text2); }
+        .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .btn-danger:hover { background: rgba(239,68,68,0.25); }
+        .btn-sm { padding: 6px 14px; font-size: 13px; border-radius: 8px; }
+        .btn-logout { background: rgba(239,68,68,0.1); color: var(--danger); border: 1px solid rgba(239,68,68,0.2); }
+        .btn-logout:hover { background: rgba(239,68,68,0.2); }
+
+        /* Badge */
+        .badge { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .badge-amber { background: rgba(245,166,35,0.15); color: var(--accent); }
+        .badge-green { background: rgba(34,197,94,0.15); color: var(--success); }
+        .badge-red { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .badge-cyan { background: rgba(6,182,212,0.15); color: var(--info); }
+
+        /* Progress bar */
+        .progress-bar { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+
+        /* Chatbot */
+        .chatbot-toggle { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), #FF6B35); color: #000; border: none; cursor: pointer; font-size: 22px; z-index: 100; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 24px rgba(245,166,35,0.35); transition: all 0.3s; }
+        .chatbot-toggle:hover { transform: scale(1.08); }
+        .chatbot-window { position: fixed; bottom: 92px; right: 24px; width: 380px; max-height: 520px; background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; z-index: 100; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 8px 40px rgba(0,0,0,0.5); transform: scale(0.9) translateY(10px); opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .chatbot-window.open { transform: scale(1) translateY(0); opacity: 1; visibility: visible; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+        .chat-msg { max-width: 85%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+        .chat-msg.bot { background: var(--card); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 4px; }
+        .chat-msg.user { background: linear-gradient(135deg, var(--accent), #FF6B35); color: #000; align-self: flex-end; border-bottom-right-radius: 4px; }
+
+        /* Toast */
+        .toast-container { position: fixed; top: 80px; right: 24px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+        .toast { padding: 12px 20px; border-radius: 12px; font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 10px; animation: toastIn 0.3s ease; min-width: 280px; border: 1px solid; }
+        .toast-warning { background: rgba(249,115,22,0.12); border-color: rgba(249,115,22,0.3); color: var(--warning); }
+        .toast-danger { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.3); color: var(--danger); }
+        .toast-success { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.3); color: var(--success); }
+        .toast-info { background: rgba(6,182,212,0.12); border-color: rgba(6,182,212,0.3); color: var(--info); }
+        @keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 150; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .modal-overlay.open { opacity: 1; visibility: visible; }
+        .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 18px; padding: 28px; width: 90%; max-width: 520px; max-height: 85vh; overflow-y: auto; transform: scale(0.95); transition: transform 0.3s; }
+        .modal-overlay.open .modal { transform: scale(1); }
+
+        /* Tabs */
+        .tab { padding: 8px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; color: var(--text2); }
+        .tab:hover { color: var(--text); }
+        .tab.active { background: rgba(245,166,35,0.15); color: var(--accent); }
+
+        /* Expense list item */
+        .expense-item { display: flex; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border); transition: background 0.2s; }
+        .expense-item:hover { background: var(--card-h); }
+        .expense-item:last-child { border-bottom: none; }
+        .cat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+        /* Checklist */
+        .check-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+        .check-item:hover { background: var(--card-h); }
+        .check-box { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--border-l); display: flex; align-items: center; justify-content: center; transition: all 0.2s; flex-shrink: 0; }
+        .check-box.checked { background: var(--accent); border-color: var(--accent); color: #000; }
+        .check-item.done .check-label { text-decoration: line-through; color: var(--text3); }
+
+        /* Animations */
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-up { animation: fadeUp 0.5s ease forwards; }
+        .fade-up-d1 { animation-delay: 0.05s; opacity: 0; }
+        .fade-up-d2 { animation-delay: 0.1s; opacity: 0; }
+        .fade-up-d3 { animation-delay: 0.15s; opacity: 0; }
+        .fade-up-d4 { animation-delay: 0.2s; opacity: 0; }
+
+        @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.3); opacity: 0; } }
+        .pulse-dot { position: relative; }
+        .pulse-dot::before { content: ''; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--accent); animation: pulse-ring 2s infinite; }
+
+        /* Itinerary timeline */
+        .timeline-item { position: relative; padding-left: 32px; padding-bottom: 24px; }
+        .timeline-item::before { content: ''; position: absolute; left: 7px; top: 24px; bottom: 0; width: 2px; background: var(--border); }
+        .timeline-item:last-child::before { display: none; }
+        .timeline-dot { position: absolute; left: 0; top: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg2); }
+
+        /* Loading Spinner */
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: -260px; top: 0; bottom: 0; z-index: 80; }
+            .sidebar.mobile-open { left: 0; }
+            .mobile-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 70; display: none; }
+            .mobile-overlay.show { display: block; }
+            .chatbot-window { width: calc(100% - 32px); right: 16px; bottom: 84px; }
+            .content { padding: 16px; }
+        }
+
+        /* Category colors */
+        .cat-food { background: rgba(249,115,22,0.15); color: #F97316; }
+        .cat-hotel { background: rgba(139,92,246,0.15); color: #8B5CF6; }
+        .cat-transport { background: rgba(6,182,212,0.15); color: #06B6D4; }
+        .cat-shopping { background: rgba(236,72,153,0.15); color: #EC4899; }
+        .cat-entertainment { background: rgba(34,197,94,0.15); color: #22C55E; }
+        .cat-medical { background: rgba(239,68,68,0.15); color: #EF4444; }
+        .cat-flight { background: rgba(59,130,246,0.15); color: #3B82F6; }
+        .cat-others { background: rgba(107,114,128,0.15); color: #6B7280; }
+    </style>
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash">
+        <div class="splash-logo">TravelOS</div>
+        <p style="color:var(--text2);margin-top:8px;font-size:14px;">AI Travel Companion & Budget Planner</p>
+        <div class="splash-bar"><div class="splash-bar-inner"></div></div>
+    </div>
+
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleMobileSidebar()"></div>
+
+    <!-- App -->
+    <div class="app" id="app" style="opacity:0;">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div style="padding:20px 16px 12px;display:flex;align-items:center;gap:10px;">
+                <div style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#FF6B35);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                    <i class="fas fa-paper-plane" style="color:#000;font-size:16px;"></i>
+                </div>
+                <span class="logo-text" style="font-family:'Outfit';font-weight:800;font-size:20px;background:linear-gradient(135deg,var(--accent),#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">TravelOS</span>
+            </div>
+            <div style="padding:8px 8px 4px;">
+                <div style="padding:0 8px;margin-bottom:6px;"><span class="nav-label" style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Main</span></div>
+                <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+                    <span class="nav-icon"><i class="fas fa-th-large"></i></span><span class="nav-label">Dashboard</span>
+                </div>
+                <div class="nav-item" data-page="trips" onclick="navigate('trips')">
+                    <span class="nav-icon"><i class="fas fa-suitcase-rolling"></i></span><span class="nav-label">My Trips</span>
+                </div>
+                <div class="nav-item" data-page="expenses" onclick="navigate('expenses')">
+                    <span class="nav-icon"><i class="fas fa-receipt"></i></span><span class="nav-label">Expenses</span>
+                </div>
+                <div class="nav-item" data-page="analytics" onclick="navigate('analytics')">
+                    <span class="nav-icon"><i class="fas fa-chart-pie"></i></span><span class="nav-label">Analytics</span>
+                </div>
+                <div style="padding:0 8px;margin:12px 0 6px;"><span class="nav-label" style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">AI & Explore</span></div>
+                <div class="nav-item" data-page="advisor" onclick="navigate('advisor')">
+                    <span class="nav-icon"><i class="fas fa-robot"></i></span><span class="nav-label">AI Advisor</span>
+                </div>
+                <div class="nav-item" data-page="explore" onclick="navigate('explore')">
+                    <span class="nav-icon"><i class="fas fa-compass"></i></span><span class="nav-label">Explore</span>
+                </div>
+                <div class="nav-item" data-page="itinerary" onclick="navigate('itinerary')">
+                    <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span><span class="nav-label">Itinerary</span>
+                </div>
+                <div style="padding:0 8px;margin:12px 0 6px;"><span class="nav-label" style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Tools</span></div>
+                <div class="nav-item" data-page="split" onclick="navigate('split')">
+                    <span class="nav-icon"><i class="fas fa-users"></i></span><span class="nav-label">Split Expenses</span>
+                </div>
+                <div class="nav-item" data-page="converter" onclick="navigate('converter')">
+                    <span class="nav-icon"><i class="fas fa-exchange-alt"></i></span><span class="nav-label">Currency Converter</span>
+                </div>
+                <div class="nav-item" data-page="packing" onclick="navigate('packing')">
+                    <span class="nav-icon"><i class="fas fa-suitcase"></i></span><span class="nav-label">Packing List</span>
+                </div>
+                <div class="nav-item" data-page="badges" onclick="navigate('badges')">
+                    <span class="nav-icon"><i class="fas fa-trophy"></i></span><span class="nav-label">Badges</span>
+                </div>
+            </div>
+            <div style="margin-top:auto;padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff;" id="userAvatar">T</div>
+                <div class="user-info" style="flex:1;">
+                    <div style="font-size:13px;font-weight:600;" id="userName">Traveller</div>
+                    <div style="font-size:11px;color:var(--text3);" id="userPlan">Free Plan</div>
+                </div>
+                <button onclick="handleLogout()" class="btn btn-sm btn-logout" style="padding:4px 10px;font-size:11px;"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <div class="main-area">
+            <header class="topbar">
+                <button onclick="toggleSidebar()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px;padding:4px;"><i class="fas fa-bars"></i></button>
+                <h2 id="pageTitle" style="font-size:18px;font-weight:700;flex:1;">Dashboard</h2>
+                <button onclick="showNotifications()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;position:relative;padding:4px;">
+                    <i class="fas fa-bell"></i>
+                    <span id="notifDot" style="position:absolute;top:0;right:0;width:8px;height:8px;background:var(--danger);border-radius:50%;display:none;"></span>
+                </button>
+                <div style="width:1px;height:24px;background:var(--border);"></div>
+                <div style="display:flex;align-items:center;gap:8px;cursor:pointer;" onclick="navigate('trips')">
+                    <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#FF6B35);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;" id="topbarAvatar">T</div>
+                </div>
+            </header>
+            <main class="content" id="content">
+                <div style="display:flex;align-items:center;justify-content:center;height:50vh;">
+                    <div class="spinner"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Chatbot -->
+    <button class="chatbot-toggle" id="chatToggle" onclick="toggleChat()">
+        <i class="fas fa-comment-dots"></i>
+    </button>
+    <div class="chatbot-window" id="chatWindow">
+        <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:between;">
+            <div style="display:flex;align-items:center;gap:10px;flex:1;">
+                <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#FF6B35);display:flex;align-items:center;justify-content:center;"><i class="fas fa-robot" style="color:#000;font-size:14px;"></i></div>
+                <div><div style="font-size:14px;font-weight:700;">TravelOS AI</div><div style="font-size:11px;color:var(--success);"><i class="fas fa-circle" style="font-size:6px;"></i> Online</div></div>
+            </div>
+            <button onclick="toggleChat()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg bot">Namaste! I'm your AI travel companion. Ask me about budget tips, food suggestions, famous places, weather, or anything travel-related!</div>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;">
+            <input type="text" id="chatInput" class="input-field" placeholder="Ask about your trip..." style="flex:1;" onkeydown="if(event.key==='Enter')sendChat()">
+            <button onclick="sendChat()" class="btn btn-primary" style="padding:10px 14px;"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Auth Modal -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal" style="max-width:440px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="font-size:20px;font-weight:800;" id="authModalTitle">Login to TravelOS</h3>
+                <button onclick="closeAuthModal()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="authFormContainer">
+                <!-- Login Form -->
+                <form id="loginForm" onsubmit="handleLogin(event)">
+                    <div style="display:grid;gap:14px;">
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Email</label>
+                            <input type="email" class="input-field" id="loginEmail" placeholder="your@email.com" required>
+                        </div>
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Password</label>
+                            <input type="password" class="input-field" id="loginPassword" placeholder="••••••••" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px;">Login</button>
+                        <p style="text-align:center;font-size:13px;color:var(--text3);">
+                            Don't have an account? <a href="#" onclick="showRegisterForm();return false;" style="color:var(--accent);">Register</a>
+                        </p>
+                    </div>
+                </form>
+                <!-- Register Form (hidden initially) -->
+                <form id="registerForm" onsubmit="handleRegister(event)" style="display:none;">
+                    <div style="display:grid;gap:14px;">
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Full Name</label>
+                            <input type="text" class="input-field" id="regName" placeholder="Your Name" required>
+                        </div>
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Email</label>
+                            <input type="email" class="input-field" id="regEmail" placeholder="your@email.com" required>
+                        </div>
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Password</label>
+                            <input type="password" class="input-field" id="regPassword" placeholder="••••••••" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:6px;">Create Account</button>
+                        <p style="text-align:center;font-size:13px;color:var(--text3);">
+                            Already have an account? <a href="#" onclick="showLoginForm();return false;" style="color:var(--accent);">Login</a>
+                        </p>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Trip Modal -->
+    <div class="modal-overlay" id="tripModal">
+        <div class="modal">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <h3 style="font-size:20px;font-weight:800;">Create New Trip</h3>
+                <button onclick="closeModal('tripModal')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="tripForm" onsubmit="createTrip(event)">
+                <div style="display:grid;gap:16px;">
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Destination</label>
+                        <select class="input-field" id="tripDest" required>
+                            <option value="">Select city...</option>
+                            <option>Jaipur</option><option>Delhi</option><option>Mumbai</option><option>Goa</option><option>Agra</option><option>Varanasi</option><option>Kerala</option><option>Manali</option><option>Udaipur</option><option>Rishikesh</option>
+                        </select>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Start Date</label>
+                            <input type="date" class="input-field" id="tripStart" required>
+                        </div>
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">End Date</label>
+                            <input type="date" class="input-field" id="tripEnd" required>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Budget (INR)</label>
+                        <input type="number" class="input-field" id="tripBudget" placeholder="25000" required min="1000">
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Travellers</label>
+                            <input type="number" class="input-field" id="tripTravellers" value="1" min="1" max="20" required>
+                        </div>
+                        <div>
+                            <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Travel Type</label>
+                            <select class="input-field" id="tripType">
+                                <option>Solo</option><option>Friends</option><option>Family</option><option>Business</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;"><i class="fas fa-plus"></i> Create Trip</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div class="modal-overlay" id="expenseModal">
+        <div class="modal">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+                <h3 style="font-size:20px;font-weight:800;">Add Expense</h3>
+                <button onclick="closeModal('expenseModal')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;"><i class="fas fa-times"></i></button>
+            </div>
+            <form id="expenseForm" onsubmit="addExpense(event)">
+                <div style="display:grid;gap:16px;">
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Category</label>
+                        <select class="input-field" id="expCat" required>
+                            <option value="">Select category...</option>
+                            <option value="food">Food</option><option value="hotel">Hotel</option><option value="transport">Transport</option><option value="shopping">Shopping</option><option value="entertainment">Entertainment</option><option value="medical">Medical</option><option value="flight">Flight</option><option value="others">Others</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Description</label>
+                        <input type="text" class="input-field" id="expDesc" placeholder="Lunch at restaurant" required>
+                    </div>
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Amount (INR)</label>
+                        <input type="number" class="input-field" id="expAmount" placeholder="500" required min="1">
+                    </div>
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">Date</label>
+                        <input type="date" class="input-field" id="expDate" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;"><i class="fas fa-plus"></i> Add Expense</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+
+    <script>
+    // ============================================================
+    // API CONFIGURATION
+    // ============================================================
+    const API_URL = localStorage.getItem('API_URL') || 'http://localhost:5001/api';
+    let authToken = localStorage.getItem('travelos_token');
+
+    // ============================================================
+    // API HELPER
+    // ============================================================
+    async function apiCall(endpoint, options = {}) {
+        const headers = {
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+        try {
+            const response = await fetch(`${API_URL}${endpoint}`, {
+                ...options,
+                headers
+            });
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({}));
+                if (response.status === 401) {
+                    // Token expired - logout
+                    handleLogout();
+                    throw new Error('Session expired. Please login again.');
+                }
+                throw new Error(error.error || `API Error: ${response.status}`);
+            }
+            return response.json();
+        } catch (err) {
+            if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+                throw new Error('Cannot connect to server. Please make sure the backend is running.');
+            }
+            throw err;
+        }
+    }
+
+    // ============================================================
+    // API FUNCTIONS
+    // ============================================================
+    const authAPI = {
+        register: (data) => apiCall('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+        login: (data) => apiCall('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+        logout: () => {
+            localStorage.removeItem('travelos_token');
+            authToken = null;
+        },
+        setToken: (token) => {
+            authToken = token;
+            localStorage.setItem('travelos_token', token);
+        },
+        getToken: () => authToken,
+        isLoggedIn: () => !!authToken
+    };
+
+    const tripsAPI = {
+        getAll: () => apiCall('/trips'),
+        create: (data) => apiCall('/trips', { method: 'POST', body: JSON.stringify(data) }),
+        update: (id, data) => apiCall(`/trips/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+        delete: (id) => apiCall(`/trips/${id}`, { method: 'DELETE' })
+    };
+
+    const expensesAPI = {
+        getAll: (tripId) => apiCall(`/expenses${tripId ? `?tripId=${tripId}` : ''}`),
+        create: (data) => apiCall('/expenses', { method: 'POST', body: JSON.stringify(data) }),
+        update: (id, data) => apiCall(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+        delete: (id) => apiCall(`/expenses/${id}`, { method: 'DELETE' }),
+        getSummary: (tripId) => apiCall(`/expenses/summary/${tripId}`)
+    };
+
+    const analyticsAPI = {
+        get: (tripId) => apiCall(`/analytics/${tripId}`)
+    };
+
+    const packingAPI = {
+        get: (tripId) => apiCall(`/packing/${tripId}`),
+        update: (tripId, items) => apiCall(`/packing/${tripId}`, { method: 'PUT', body: JSON.stringify({ items }) })
+    };
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let state = {
+        page: 'dashboard',
+        trips: [],
+        activeTripId: null,
+        expenses: [],
+        chatOpen: false,
+        sidebarCollapsed: false,
+        packingItems: [
+            { id: 1, text: 'Passport / ID Card', done: false },
+            { id: 2, text: 'Clothes (3-4 sets)', done: false },
+            { id: 3, text: 'Shoes / Sandals', done: false },
+            { id: 4, text: 'Power Bank', done: false },
+            { id: 5, text: 'Phone Charger', done: false },
+            { id: 6, text: 'Medicines', done: false },
+            { id: 7, text: 'Toiletries', done: false },
+            { id: 8, text: 'Sunscreen', done: false },
+            { id: 9, text: 'Umbrella', done: false },
+            { id: 10, text: 'Camera', done: false },
+            { id: 11, text: 'Snacks', done: false },
+            { id: 12, text: 'Water Bottle', done: false },
+            { id: 13, text: 'First Aid Kit', done: false },
+            { id: 14, text: 'Sunglasses', done: false },
+            { id: 15, text: 'Jacket / Sweater', done: false },
+            { id: 16, text: 'Travel Pillow', done: false },
+        ],
+        badges: [
+            { name: 'Budget Master', icon: 'fa-wallet', color: '#F5A623', desc: 'Stayed under budget for a trip', unlocked: false },
+            { name: 'Solo Explorer', icon: 'fa-hiking', color: '#06B6D4', desc: 'Completed a solo trip', unlocked: true },
+            { name: 'Foodie', icon: 'fa-utensils', color: '#F97316', desc: 'Added 10+ food expenses', unlocked: false },
+            { name: 'Backpacker', icon: 'fa-backpack', color: '#22C55E', desc: 'Trip under ₹10,000', unlocked: false },
+            { name: 'Globe Trotter', icon: 'fa-globe-americas', color: '#8B5CF6', desc: 'Created 5+ trips', unlocked: false },
+            { name: 'Smart Saver', icon: 'fa-piggy-bank', color: '#EC4899', desc: 'Saved 30%+ of budget', unlocked: false },
+            { name: 'Night Owl', icon: 'fa-moon', color: '#6366F1', desc: 'Added expense after 10 PM', unlocked: true },
+            { name: 'Planner Pro', icon: 'fa-clipboard-check', color: '#14B8A6', desc: 'Completed all packing items', unlocked: false },
+        ],
+        splitMembers: ['Rahul', 'Prashant', 'Rohit', 'Sneha'],
+        splitPayments: [],
+        user: null,
+        loading: false
+    };
+
+    let charts = {};
+    let isInitialized = false;
+
+    // ============================================================
+    // CITY DATABASE
+    // ============================================================
+    const cityData = {
+        'jaipur': {
+            food: ['Pyaaz Kachori — Rawat Misthan Bhandar', 'Dal Baati Churma — Sanjay Omelette', 'Ghewar — Sodhani Sweets', 'Lassi — Lassiwala', 'Laal Maas — Handi Restaurant', 'Mirchi Bada — Shankar Namkeen'],
+            places: ['Hawa Mahal', 'Nahargarh Fort', 'Jal Mahal', 'Amer Fort', 'City Palace', 'Jantar Mantar', 'Albert Hall Museum'],
+            weather: { temp: 34, condition: 'Sunny', humidity: 45, rain: 10, sunrise: '6:12 AM', sunset: '6:48 PM' },
+            tips: 'Bargain at Johari Bazaar, wear comfortable shoes for fort climbing, visit Amer Fort early morning to avoid crowds.',
+            packing: ['Sunscreen', 'Light cotton clothes', 'Comfortable walking shoes', 'Sunglasses', 'Water bottle']
+        },
+        'delhi': {
+            food: ['Chole Bhature — Sita Ram Diwan Chand', 'Parathe — Parathe Wali Gali', 'Butter Chicken — Moti Mahal', 'Jalebi — Old Famous Jalebi Wala', 'Chaat — Daulat Ki Chaat', 'Biryani — Karim\'s'],
+            places: ['Red Fort', 'Qutub Minar', 'India Gate', 'Lotus Temple', 'Humayun\'s Tomb', 'Chandni Chowk', 'Akshardham Temple'],
+            weather: { temp: 32, condition: 'Partly Cloudy', humidity: 55, rain: 25, sunrise: '5:58 AM', sunset: '7:02 PM' },
+            tips: 'Use Delhi Metro for cheap and fast travel, avoid Old Delhi in peak afternoon heat, try street food at night.',
+            packing: ['Umbrella', 'Light clothes', 'Comfortable shoes', 'Scarf for temples', 'Hand sanitizer']
+        },
+        'mumbai': {
+            food: ['Vada Pav — Ashok Vada Pav', 'Misal Pav — Shri Krishna', 'Pav Bhaji — Sardar Pav Bhaji', 'Bhel Puri — Chowpatty Beach', 'Pani Puri — Elco Market', 'Bombay Sandwich — Badshah'],
+            places: ['Gateway of India', 'Marine Drive', 'Elephanta Caves', 'Bandra-Worli Sea Link', 'Siddhivinayak Temple', 'Colaba Causeway'],
+            weather: { temp: 30, condition: 'Humid', humidity: 78, rain: 40, sunrise: '6:15 AM', sunset: '7:10 PM' },
+            tips: 'Use local trains for cheapest travel, carry umbrella always in monsoon, try street food at Juhu Beach.',
+            packing: ['Rain jacket', 'Umbrella', 'Extra pair of clothes', 'Floaters', 'Mosquito repellent']
+        },
+        'goa': {
+            food: ['Fish Curry Rice — Martin\'s Corner', 'Bebinca — Margao bakeries', 'Prawn Balchão — Infantaria', 'Sorpotel — mum\'s kitchen', 'Feni — local distillery', 'Goan Sausage — Viva Panjim'],
+            places: ['Baga Beach', 'Dudhsagar Falls', 'Basilica of Bom Jesus', 'Fort Aguada', 'Palolem Beach', 'Old Goa Churches'],
+            weather: { temp: 29, condition: 'Tropical', humidity: 72, rain: 35, sunrise: '6:22 AM', sunset: '6:55 PM' },
+            tips: 'Rent a scooter for ₹300-500/day, visit beaches early morning, try thali at local joints for cheap meals.',
+            packing: ['Swimwear', 'Sunscreen SPF 50', 'Flip flops', 'Beach towel', 'Light cotton clothes']
+        },
+        'agra': {
+            food: ['Petha — Panchhi Petha', 'Mughlai Cuisine — Pinch of Spice', 'Bedai — Deviram sweets', 'Jalebi — Ram Babu', 'Dalmoth — Bhimsen Dalmoth', 'Tandoori Chicken — Dasaprakash'],
+            places: ['Taj Mahal', 'Agra Fort', 'Mehtab Bagh', 'Fatehpur Sikri', 'Itmad-ud-Daulah Tomb', 'Sikandra'],
+            weather: { temp: 36, condition: 'Hot', humidity: 40, rain: 5, sunrise: '5:45 AM', sunset: '7:15 PM' },
+            tips: 'Visit Taj at sunrise for best experience and fewer crowds, carry water bottle, avoid touts near Taj.',
+            packing: ['Sun hat', 'Sunscreen', 'Light full-sleeve clothes', 'Water bottle', 'Comfortable shoes']
+        },
+        'varanasi': {
+            food: ['Kachori Sabzi — Madhur Jalpan', 'Thandai — Blue Lassi', 'Chaat — Kashi Chaat Bhandar', 'Lassi — Pehalwan Lassi', 'Tamatar Chaat — Baati Chokha', 'Malaiyo — Ksheer Sagar'],
+            places: ['Dashashwamedh Ghat', 'Kashi Vishwanath Temple', 'Sarnath', 'Assi Ghat', 'Manikarnika Ghat', 'Dhamekh Stupa'],
+            weather: { temp: 33, condition: 'Warm', humidity: 60, rain: 20, sunrise: '5:40 AM', sunset: '6:30 PM' },
+            tips: 'Take boat ride at dawn for Ganga Aarti view, respect local customs at temples, try lassi but go easy.',
+            packing: ['Modest clothes for temples', 'Light scarf', 'Comfortable sandals', 'Hand sanitizer', 'Small flashlight']
+        },
+        'kerala': {
+            food: ['Appam Stew — Indian Coffee House', 'Puttu Kadala — local eateries', 'Karimeen Fry — Tharavadu', 'Payasam — Zamorin\'s', 'Kerala Parotta — Parotta stalls', 'Sadya — Onam special'],
+            places: ['Munnar Tea Gardens', 'Alleppey Backwaters', 'Periyar Wildlife Sanctuary', 'Kovalam Beach', 'Athirappilly Falls', 'Fort Kochi'],
+            weather: { temp: 28, condition: 'Rainy', humidity: 85, rain: 65, sunrise: '6:10 AM', sunset: '6:40 PM' },
+            tips: 'Try houseboat stay in Alleppey, carry rain gear year-round, enjoy local seafood for best prices.',
+            packing: ['Raincoat', 'Umbrella', 'Quick-dry clothes', 'Insect repellent', 'Waterproof bag']
+        },
+        'manali': {
+            food: ['Thukpa — Johnson\'s Cafe', 'Momos — Dumpling Mama', 'Sidu — local dhabas', 'Trout Fish — The Himalayan', 'Chana Madra — Sita Ram Dhaba', 'Babru — Manali market'],
+            places: ['Rohtang Pass', 'Solang Valley', 'Hadimba Temple', 'Old Manali', 'Jogini Falls', 'Naggar Castle'],
+            weather: { temp: 15, condition: 'Cool', humidity: 50, rain: 15, sunrise: '6:30 AM', sunset: '6:15 PM' },
+            tips: 'Carry warm clothes even in summer, book Rohtang permit in advance, try cafes in Old Manali.',
+            packing: ['Heavy jacket', 'Thermal wear', 'Woollen cap', 'Gloves', 'Trekking shoes']
+        },
+        'udaipur': {
+            food: ['Dal Baati Churma — Krishna Mishthan', 'Laal Maas — Natraj Restaurant', 'Gatte ki Sabzi — local eateries', 'Kachori — Jain Nashta', 'Mirchi Vada — street stalls', 'Rabdi — Doodh Misthan'],
+            places: ['City Palace', 'Lake Pichola', 'Jag Mandir', 'Saheliyon ki Bari', 'Monsoon Palace', 'Fateh Sagar Lake'],
+            weather: { temp: 33, condition: 'Warm', humidity: 42, rain: 8, sunrise: '6:05 AM', sunset: '7:00 PM' },
+            tips: 'Take sunset boat ride on Lake Pichola, visit City Palace early, try rooftop restaurants for views.',
+            packing: ['Sunscreen', 'Light clothes', 'Comfortable shoes', 'Camera', 'Sunglasses']
+        },
+        'rishikesh': {
+            food: ['Chole Bhature — Chotiwala', 'Aloo Puri — local joints', 'Lassi — Ram Lassi', 'Italian — Little Buddha Cafe', 'Thali — Ayurvedic restaurants', 'Maggi — riverside stalls'],
+            places: ['Laxman Jhula', 'Ram Jhula', 'Triveni Ghat', 'Neelkanth Mahadev Temple', 'Beatles Ashram', 'Shivpuri Rafting Point'],
+            weather: { temp: 31, condition: 'Warm', humidity: 55, rain: 18, sunrise: '5:50 AM', sunset: '7:05 PM' },
+            tips: 'Book rafting in advance, attend Ganga Aarti at Triveni Ghat, try cafes near Laxman Jhula.',
+            packing: ['Quick-dry clothes', 'Sport shoes', 'Sunscreen', 'Towel', 'Waterproof phone pouch']
+        }
+    };
+
+    // ============================================================
+    // CURRENCY DATA
+    // ============================================================
+    const currencies = {
+        'INR': { symbol: '₹', rate: 1, name: 'Indian Rupee' },
+        'USD': { symbol: '$', rate: 0.012, name: 'US Dollar' },
+        'EUR': { symbol: '€', rate: 0.011, name: 'Euro' },
+        'AED': { symbol: 'د.إ', rate: 0.044, name: 'UAE Dirham' },
+        'GBP': { symbol: '£', rate: 0.0095, name: 'British Pound' },
+        'THB': { symbol: '฿', rate: 0.42, name: 'Thai Baht' },
+        'SGD': { symbol: 'S$', rate: 0.016, name: 'Singapore Dollar' },
+        'JPY': { symbol: '¥', rate: 1.83, name: 'Japanese Yen' },
+        'AUD': { symbol: 'A$', rate: 0.018, name: 'Australian Dollar' },
+        'MYR': { symbol: 'RM', rate: 0.056, name: 'Malaysian Ringgit' }
+    };
+
+    // ============================================================
+    // EXPENSE CATEGORIES
+    // ============================================================
+    const categories = {
+        food: { label: 'Food', icon: 'fa-utensils', class: 'cat-food' },
+        hotel: { label: 'Hotel', icon: 'fa-bed', class: 'cat-hotel' },
+        transport: { label: 'Transport', icon: 'fa-car', class: 'cat-transport' },
+        shopping: { label: 'Shopping', icon: 'fa-shopping-bag', class: 'cat-shopping' },
+        entertainment: { label: 'Entertainment', icon: 'fa-gamepad', class: 'cat-entertainment' },
+        medical: { label: 'Medical', icon: 'fa-first-aid', class: 'cat-medical' },
+        flight: { label: 'Flight', icon: 'fa-plane', class: 'cat-flight' },
+        others: { label: 'Others', icon: 'fa-ellipsis-h', class: 'cat-others' }
+    };
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    function fmt(n) { return '₹' + Number(n).toLocaleString('en-IN'); }
+    function getTrip() { return state.trips.find(t => t._id === state.activeTripId || t.id === state.activeTripId); }
+    function getExpenses() { return state.expenses.filter(e => e.tripId === state.activeTripId); }
+    function totalSpent() { return getExpenses().reduce((s, e) => s + e.amount, 0); }
+    function daysBetween(d1, d2) { return Math.max(1, Math.ceil((new Date(d2) - new Date(d1)) / 86400000)); }
+    function daysLeft() { const t = getTrip(); if (!t) return 0; const left = Math.ceil((new Date(t.endDate) - new Date()) / 86400000); return Math.max(0, left); }
+    function todayStr() { return new Date().toISOString().split('T')[0]; }
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+    function destroyCharts() {
+        Object.values(charts).forEach(c => { if (c && c.destroy) c.destroy(); });
+        charts = {};
+    }
+
+    function getTripId(trip) { return trip._id || trip.id; }
+
+    // ============================================================
+    // SAVE/LOCAL STATE (offline fallback)
+    // ============================================================
+    function saveState() {
+        try {
+            localStorage.setItem('travelos_state', JSON.stringify({
+                trips: state.trips,
+                activeTripId: state.activeTripId,
+                expenses: state.expenses,
+                packingItems: state.packingItems,
+                badges: state.badges,
+                splitPayments: state.splitPayments,
+                user: state.user
+            }));
+        } catch(e) {}
+    }
+
+    function loadState() {
+        try {
+            const d = JSON.parse(localStorage.getItem('travelos_state'));
+            if (d) {
+                state.trips = d.trips || [];
+                state.activeTripId = d.activeTripId || null;
+                state.expenses = d.expenses || [];
+                state.packingItems = d.packingItems || state.packingItems;
+                state.badges = d.badges || state.badges;
+                state.splitPayments = d.splitPayments || [];
+                state.user = d.user || null;
+                return true;
+            }
+        } catch(e) {}
+        return false;
+    }
+
+    // ============================================================
+    // AUTH FUNCTIONS
+    // ============================================================
+    function showAuthModal() {
+        document.getElementById('authModal').classList.add('open');
+        showLoginForm();
+    }
+
+    function closeAuthModal() {
+        document.getElementById('authModal').classList.remove('open');
+    }
+
+    function showLoginForm() {
+        document.getElementById('authModalTitle').textContent = 'Login to TravelOS';
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('registerForm').style.display = 'none';
+    }
+
+    function showRegisterForm() {
+        document.getElementById('authModalTitle').textContent = 'Create Account';
+        document.getElementById('loginForm').style.display = 'none';
+        document.getElementById('registerForm').style.display = 'block';
+    }
+
+    async function handleLogin(e) {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        try {
+            const data = await authAPI.login({ email, password });
+            authAPI.setToken(data.token);
+            state.user = data.user;
+            saveState();
+            closeAuthModal();
+            toast(`Welcome back, ${data.user.name}!`, 'success');
+            updateUserUI();
+            await loadAllData();
+            navigate('dashboard');
+        } catch (err) {
+            toast('Login failed: ' + err.message, 'danger');
+        }
+    }
+
+    async function handleRegister(e) {
+        e.preventDefault();
+        const name = document.getElementById('regName').value;
+        const email = document.getElementById('regEmail').value;
+        const password = document.getElementById('regPassword').value;
+        try {
+            const data = await authAPI.register({ name, email, password });
+            authAPI.setToken(data.token);
+            state.user = data.user;
+            saveState();
+            closeAuthModal();
+            toast(`Welcome to TravelOS, ${name}!`, 'success');
+            updateUserUI();
+            await loadAllData();
+            navigate('dashboard');
+        } catch (err) {
+            toast('Registration failed: ' + err.message, 'danger');
+        }
+    }
+
+    function handleLogout() {
+        authAPI.logout();
+        state.user = null;
+        state.trips = [];
+        state.expenses = [];
+        state.activeTripId = null;
+        saveState();
+        updateUserUI();
+        toast('Logged out successfully', 'info');
+        showAuthModal();
+    }
+
+    function updateUserUI() {
+        const name = state.user ? state.user.name : 'Traveller';
+        const initial = name.charAt(0).toUpperCase();
+        document.getElementById('userName').textContent = name;
+        document.getElementById('userAvatar').textContent = initial;
+        document.getElementById('topbarAvatar').textContent = initial;
+    }
+
+    // ============================================================
+    // DATA LOADING
+    // ============================================================
+    async function loadAllData() {
+        if (!authAPI.isLoggedIn()) return;
+        state.loading = true;
+        try {
+            // Load trips
+            const trips = await tripsAPI.getAll();
+            state.trips = trips;
+            
+            // Set active trip if not set or if active trip not in list
+            if (state.activeTripId && !trips.find(t => getTripId(t) === state.activeTripId)) {
+                state.activeTripId = trips.length > 0 ? getTripId(trips[0]) : null;
+            } else if (!state.activeTripId && trips.length > 0) {
+                state.activeTripId = getTripId(trips[0]);
+            }
+            
+            // Load expenses for active trip
+            if (state.activeTripId) {
+                const expenses = await expensesAPI.getAll(state.activeTripId);
+                state.expenses = expenses;
+            }
+            
+            // Load packing list
+            if (state.activeTripId) {
+                try {
+                    const packing = await packingAPI.get(state.activeTripId);
+                    if (packing && packing.items) {
+                        state.packingItems = packing.items;
+                    }
+                } catch (e) {
+                    // Use default packing items
+                }
+            }
+            
+            saveState();
+        } catch (err) {
+            console.error('Error loading data:', err);
+            // Fallback to local data
+            if (!loadState()) {
+                // Seed demo data if nothing exists
+                seedData();
+            }
+        }
+        state.loading = false;
+    }
+
+    // ============================================================
+    // SEED DATA (offline fallback)
+    // ============================================================
+    function seedData() {
+        const today = new Date();
+        const d = (offset) => { const dt = new Date(today); dt.setDate(dt.getDate() + offset); return dt.toISOString().split('T')[0]; };
+
+        const trip = { _id: 'demo_trip', destination: 'Jaipur', startDate: d(-3), endDate: d(4), budget: 25000, currency: 'INR', travellers: 2, travelType: 'Friends', createdAt: Date.now() };
+        state.trips = [trip];
+        state.activeTripId = 'demo_trip';
+
+        state.expenses = [
+            { _id: uid(), tripId: 'demo_trip', category: 'flight', description: 'Indigo Flight Delhi-Jaipur', amount: 7500, date: d(-3), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'transport', description: 'Cab from Airport to Hotel', amount: 800, date: d(-3), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'hotel', description: 'Hotel Royal Heritage (2 nights)', amount: 6000, date: d(-3), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Dinner at Handi Restaurant', amount: 1200, date: d(-3), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Pyaaz Kachori breakfast', amount: 200, date: d(-2), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'transport', description: 'Auto to Amer Fort', amount: 350, date: d(-2), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'entertainment', description: 'Amer Fort entry tickets', amount: 500, date: d(-2), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Lunch near Jal Mahal', amount: 650, date: d(-2), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'shopping', description: 'Jewellery at Johari Bazaar', amount: 2500, date: d(-2), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Lassi at Lassiwala', amount: 150, date: d(-1), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'transport', description: 'Cab to Nahargarh Fort', amount: 600, date: d(-1), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Dal Baati Churma dinner', amount: 900, date: d(-1), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'medical', description: 'Medicine from pharmacy', amount: 200, date: d(-1), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'shopping', description: 'Bandhani saree', amount: 1800, date: d(-1), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'food', description: 'Ghewar and sweets', amount: 350, date: d(0), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'transport', description: 'Ola to City Palace', amount: 250, date: d(0), createdAt: Date.now() },
+            { _id: uid(), tripId: 'demo_trip', category: 'entertainment', description: 'City Palace tickets', amount: 400, date: d(0), createdAt: Date.now() },
+        ];
+
+        state.splitPayments = [
+            { member: 'Rahul', amount: 7500, desc: 'Flight tickets' },
+            { member: 'Rahul', amount: 6000, desc: 'Hotel booking' },
+            { member: 'Prashant', amount: 3500, desc: 'Food & shopping' },
+            { member: 'Prashant', amount: 800, desc: 'Cab rides' },
+            { member: 'Rohit', amount: 2200, desc: 'Entry tickets & food' },
+            { member: 'Sneha', amount: 1500, desc: 'Shopping & snacks' },
+        ];
+
+        saveState();
+    }
+
+    // ============================================================
+    // NAVIGATION
+    // ============================================================
+    const pageTitles = {
+        dashboard: 'Dashboard', trips: 'My Trips', expenses: 'Expenses', analytics: 'Analytics',
+        advisor: 'AI Budget Advisor', explore: 'Explore Destination', itinerary: 'Daily Itinerary',
+        split: 'Split Expenses', converter: 'Currency Converter', packing: 'Packing Checklist', badges: 'Badges & Achievements'
+    };
+
+    function navigate(page) {
+        if (!authAPI.isLoggedIn()) {
+            showAuthModal();
+            return;
+        }
+        state.page = page;
+        destroyCharts();
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.page === page));
+        document.getElementById('pageTitle').textContent = pageTitles[page] || 'TravelOS';
+        const content = document.getElementById('content');
+        content.scrollTop = 0;
+        const renderers = { dashboard: renderDashboard, trips: renderTrips, expenses: renderExpenses, analytics: renderAnalytics, advisor: renderAdvisor, explore: renderExplore, itinerary: renderItinerary, split: renderSplit, converter: renderConverter, packing: renderPacking, badges: renderBadges };
+        if (renderers[page]) renderers[page]();
+        document.getElementById('sidebar').classList.remove('mobile-open');
+        document.getElementById('mobileOverlay').classList.remove('show');
+    }
+
+    function toggleSidebar() {
+        if (window.innerWidth <= 768) {
+            toggleMobileSidebar();
+        } else {
+            state.sidebarCollapsed = !state.sidebarCollapsed;
+            document.getElementById('sidebar').classList.toggle('collapsed', state.sidebarCollapsed);
+        }
+    }
+
+    function toggleMobileSidebar() {
+        document.getElementById('sidebar').classList.toggle('mobile-open');
+        document.getElementById('mobileOverlay').classList.toggle('show');
+    }
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    function toast(msg, type = 'info') {
+        const icons = { warning: 'fa-exclamation-triangle', danger: 'fa-times-circle', success: 'fa-check-circle', info: 'fa-info-circle' };
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.innerHTML = `<i class="fas ${icons[type]}"></i><span>${msg}</span>`;
+        document.getElementById('toastContainer').appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; el.style.transform = 'translateX(100%)'; el.style.transition = 'all 0.3s'; setTimeout(() => el.remove(), 300); }, 4000);
+    }
+
+    function showNotifications() {
+        const t = getTrip(); if (!t) return;
+        const spent = totalSpent(), pct = Math.round((spent / t.budget) * 100);
+        if (pct >= 80) toast(`You've spent ${pct}% of your budget. Slow down!`, 'danger');
+        else if (pct >= 60) toast(`Budget usage at ${pct}%. Keep an eye on spending.`, 'warning');
+        else toast(`Budget is healthy at ${pct}%. Great job!`, 'success');
+    }
+
+    // ============================================================
+    // MODAL
+    // ============================================================
+    function openModal(id) { document.getElementById(id).classList.add('open'); }
+    function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+    // ============================================================
+    // DASHBOARD
+    // ============================================================
+    function renderDashboard() {
+        const t = getTrip();
+        if (!t) {
+            document.getElementById('content').innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:16px;">
+                <i class="fas fa-suitcase-rolling" style="font-size:48px;color:var(--text3);"></i>
+                <h3 style="color:var(--text2);">No Active Trip</h3>
+                <p style="color:var(--text3);font-size:14px;">Create your first trip to get started</p>
+                <button class="btn btn-primary" onclick="navigate('trips')"><i class="fas fa-plus"></i> Create Trip</button>
+            </div>`;
+            return;
+        }
+
+        const spent = totalSpent(), remaining = t.budget - spent, pct = Math.min(100, Math.round((spent / t.budget) * 100));
+        const dl = daysLeft(), totalDays = daysBetween(t.startDate, t.endDate);
+        const tripPct = Math.min(100, Math.round(((totalDays - dl) / totalDays) * 100));
+        const dailyLimit = dl > 0 ? Math.floor(remaining / dl) : 0;
+        const healthColor = pct < 50 ? 'var(--success)' : pct < 75 ? 'var(--accent)' : pct < 90 ? 'var(--warning)' : 'var(--danger)';
+        const healthLabel = pct < 50 ? 'Excellent' : pct < 75 ? 'Good' : pct < 90 ? 'Average' : 'Critical';
+        const expenses = getExpenses();
+
+        const dayMap = {};
+        expenses.forEach(e => { dayMap[e.date] = (dayMap[e.date] || 0) + e.amount; });
+        const dayLabels = Object.keys(dayMap).sort().map(d => { const dt = new Date(d); return dt.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); });
+        const dayValues = Object.keys(dayMap).sort().map(d => dayMap[d]);
+
+        const catMap = {};
+        expenses.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + e.amount; });
+
+        document.getElementById('content').innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div>
+                <h1 style="font-size:28px;font-weight:900;">Welcome back, ${state.user ? state.user.name : 'Traveller'}</h1>
+                <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
+            </div>
+            <button class="btn btn-primary" onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()"><i class="fas fa-plus"></i> Add Expense</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
+            <div class="card stat-card amber fade-up">
+                <div style="font-size:13px;color:var(--text2);font-weight:600;">Total Budget</div>
+                <div style="font-size:28px;font-weight:900;margin-top:6px;font-family:'Outfit';">${fmt(t.budget)}</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">${totalDays} days trip</div>
+            </div>
+            <div class="card stat-card red fade-up fade-up-d1">
+                <div style="font-size:13px;color:var(--text2);font-weight:600;">Spent</div>
+                <div style="font-size:28px;font-weight:900;margin-top:6px;font-family:'Outfit';color:var(--danger);">${fmt(spent)}</div>
+                <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:${pct}%;background:${healthColor};"></div></div>
+            </div>
+            <div class="card stat-card green fade-up fade-up-d2">
+                <div style="font-size:13px;color:var(--text2);font-weight:600;">Remaining</div>
+                <div style="font-size:28px;font-weight:900;margin-top:6px;font-family:'Outfit';color:${remaining > 0 ? 'var(--success)' : 'var(--danger)'};">${fmt(remaining)}</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">${dl} days left</div>
+            </div>
+            <div class="card stat-card cyan fade-up fade-up-d3">
+                <div style="font-size:13px;color:var(--text2);font-weight:600;">Budget Health</div>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px;">
+                    <span style="font-size:28px;font-weight:900;font-family:'Outfit';color:${healthColor};">${100 - pct}%</span>
+                    <span class="badge" style="background:${healthColor}22;color:${healthColor};">${healthLabel}</span>
+                </div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">Suggested limit: ${fmt(dailyLimit)}/day</div>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px;">
+            <div class="card fade-up fade-up-d2">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Daily Spending Trend</h4>
+                <div style="height:220px;"><canvas id="dashLineChart"></canvas></div>
+            </div>
+            <div class="card fade-up fade-up-d3">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Category Breakdown</h4>
+                <div style="height:220px;"><canvas id="dashPieChart"></canvas></div>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+            <div class="card fade-up fade-up-d3">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                    <h4 style="font-size:15px;font-weight:700;">Recent Expenses</h4>
+                    <button class="btn btn-ghost btn-sm" onclick="navigate('expenses')">View All</button>
+                </div>
+                <div style="max-height:280px;overflow-y:auto;">
+                    ${expenses.slice(-6).reverse().map(e => {
+                        const cat = categories[e.category] || categories.others;
+                        return `<div class="expense-item">
+                            <div class="cat-icon ${cat.class}" style="margin-right:12px;"><i class="fas ${cat.icon}"></i></div>
+                            <div style="flex:1;"><div style="font-size:14px;font-weight:600;">${e.description}</div><div style="font-size:12px;color:var(--text3);">${cat.label} · ${new Date(e.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div></div>
+                            <div style="font-weight:700;font-family:'Outfit';color:var(--danger);">-${fmt(e.amount)}</div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div class="card fade-up fade-up-d4">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Smart Alerts</h4>
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    ${pct >= 80 ? `<div style="padding:14px;border-radius:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fas fa-exclamation-circle" style="color:var(--danger);"></i><span style="font-weight:700;color:var(--danger);">High Spending Alert</span></div>
+                        <p style="font-size:13px;color:var(--text2);line-height:1.5;">You've already spent ${pct}% of your budget. If you continue at this rate, you'll exceed your budget by ${fmt(spent - t.budget + (dailyLimit * dl))}.</p>
+                    </div>` : ''}
+                    <div style="padding:14px;border-radius:12px;background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.15);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fas fa-lightbulb" style="color:var(--accent);"></i><span style="font-weight:700;color:var(--accent);">Daily Budget Tip</span></div>
+                        <p style="font-size:13px;color:var(--text2);line-height:1.5;">To stay within budget, spend no more than ${fmt(dailyLimit)} per day for the next ${dl} days.</p>
+                    </div>
+                    <div style="padding:14px;border-radius:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.15);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fas fa-chart-line" style="color:var(--success);"></i><span style="font-weight:700;color:var(--success);">Trip Progress</span></div>
+                        <div class="progress-bar" style="margin:8px 0;"><div class="progress-fill" style="width:${tripPct}%;background:var(--success);"></div></div>
+                        <p style="font-size:13px;color:var(--text2);">${tripPct}% of your trip completed · ${dl} days remaining</p>
+                    </div>
+                    ${catMap['shopping'] && catMap['shopping'] > 2000 ? `<div style="padding:14px;border-radius:12px;background:rgba(236,72,153,0.08);border:1px solid rgba(236,72,153,0.15);">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><i class="fas fa-shopping-bag" style="color:#EC4899;"></i><span style="font-weight:700;color:#EC4899;">Shopping Alert</span></div>
+                        <p style="font-size:13px;color:var(--text2);line-height:1.5;">You've spent ${fmt(catMap['shopping'])} on shopping. Try to reduce by ${fmt(Math.floor(catMap['shopping'] * 0.3))} to stay on track.</p>
+                    </div>` : ''}
+                </div>
+            </div>
+        </div>`;
+
+        const lineCtx = document.getElementById('dashLineChart').getContext('2d');
+        charts.dashLine = new Chart(lineCtx, {
+            type: 'line',
+            data: {
+                labels: dayLabels.length ? dayLabels : ['No data'],
+                datasets: [{
+                    label: 'Daily Spend',
+                    data: dayValues.length ? dayValues : [0],
+                    borderColor: '#F5A623',
+                    backgroundColor: 'rgba(245,166,35,0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#F5A623',
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8B8DA0', font: { size: 11 } } },
+                    y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8B8DA0', font: { size: 11 }, callback: v => '₹' + v.toLocaleString('en-IN') } }
+                }
+            }
+        });
+
+        const catLabels = Object.keys(catMap).map(k => (categories[k] || categories.others).label);
+        const catValues = Object.values(catMap);
+        const catColors = Object.keys(catMap).map(k => {
+            const colors = { food: '#F97316', hotel: '#8B5CF6', transport: '#06B6D4', shopping: '#EC4899', entertainment: '#22C55E', medical: '#EF4444', flight: '#3B82F6', others: '#6B7280' };
+            return colors[k] || '#6B7280';
+        });
+        const pieCtx = document.getElementById('dashPieChart').getContext('2d');
+        charts.dashPie = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: { labels: catLabels.length ? catLabels : ['No data'], datasets: [{ data: catValues.length ? catValues : [1], backgroundColor: catColors.length ? catColors : ['#333'], borderWidth: 0, hoverOffset: 6 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#8B8DA0', font: { size: 11 }, padding: 12, usePointStyle: true, pointStyleWidth: 8 } } } }
+        });
+
+        if (pct >= 75) document.getElementById('notifDot').style.display = 'block';
+    }
+
+    // ============================================================
+    // TRIPS PAGE
+    // ============================================================
+    function renderTrips() {
+        const c = document.getElementById('content');
+        c.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div><h2 style="font-size:24px;font-weight:800;">My Trips</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Manage all your travel plans</p></div>
+            <button class="btn btn-primary" onclick="openModal('tripModal')"><i class="fas fa-plus"></i> New Trip</button>
+        </div>
+        ${state.trips.length === 0 ? `<div class="card" style="text-align:center;padding:60px 20px;"><i class="fas fa-suitcase-rolling" style="font-size:48px;color:var(--text3);margin-bottom:16px;display:block;"></i><h3 style="color:var(--text2);margin-bottom:8px;">No trips yet</h3><p style="color:var(--text3);font-size:14px;">Create your first trip to start tracking expenses</p></div>` :
+        `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;">
+            ${state.trips.map(trip => {
+                const tripId = getTripId(trip);
+                const spent = state.expenses.filter(e => e.tripId === tripId).reduce((s, e) => s + e.amount, 0);
+                const pct = Math.min(100, Math.round((spent / trip.budget) * 100));
+                const isActive = tripId === state.activeTripId;
+                const days = daysBetween(trip.startDate, trip.endDate);
+                const cityKey = trip.destination.toLowerCase();
+                const cd = cityData[cityKey];
+                return `<div class="card fade-up" style="cursor:pointer;${isActive ? 'border-color:var(--accent);box-shadow:0 0 30px rgba(245,166,35,0.1);' : ''}" onclick="setActiveTrip('${tripId}')">
+                    <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:12px;">
+                        <div>
+                            <h3 style="font-size:18px;font-weight:800;">${trip.destination}</h3>
+                            <p style="font-size:13px;color:var(--text2);margin-top:2px;">${new Date(trip.startDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} — ${new Date(trip.endDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</p>
+                        </div>
+                        ${isActive ? '<span class="badge badge-amber">Active</span>' : '<span class="badge" style="background:var(--border);color:var(--text3);">Inactive</span>'}
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+                        <div><div style="font-size:11px;color:var(--text3);">Budget</div><div style="font-size:15px;font-weight:700;font-family:'Outfit';">${fmt(trip.budget)}</div></div>
+                        <div><div style="font-size:11px;color:var(--text3);">Spent</div><div style="font-size:15px;font-weight:700;font-family:'Outfit';color:var(--danger);">${fmt(spent)}</div></div>
+                        <div><div style="font-size:11px;color:var(--text3);">Days</div><div style="font-size:15px;font-weight:700;font-family:'Outfit';">${days}</div></div>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct<50?'var(--success)':pct<75?'var(--accent)':pct<90?'var(--warning)':'var(--danger)'};"></div></div>
+                    <div style="display:flex;justify-content:space-between;margin-top:8px;">
+                        <span style="font-size:12px;color:var(--text3);">${pct}% used</span>
+                        <div style="display:flex;gap:6px;">
+                            <span class="badge badge-cyan" style="font-size:11px;">${trip.travelType}</span>
+                            <span class="badge" style="background:var(--border);color:var(--text2);font-size:11px;">${trip.travellers}P</span>
+                            <button onclick="event.stopPropagation();deleteTrip('${tripId}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:4px;transition:all 0.2s;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'"><i class="fas fa-trash-alt" style="font-size:11px;"></i></button>
+                        </div>
+                    </div>
+                    ${cd ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;">
+                        ${cd.places.slice(0,3).map(p => `<span style="font-size:11px;color:var(--text3);background:var(--bg);padding:3px 8px;border-radius:4px;">${p}</span>`).join('')}
+                    </div>` : ''}
+                </div>`;
+            }).join('')}
+        </div>`}`;
+    }
+
+    async function setActiveTrip(id) {
+        state.activeTripId = id;
+        try {
+            const expenses = await expensesAPI.getAll(id);
+            state.expenses = expenses;
+            saveState();
+        } catch (err) {
+            console.error('Error loading expenses:', err);
+        }
+        toast('Trip switched!', 'success');
+        navigate('dashboard');
+    }
+
+    async function deleteTrip(id) {
+        if (!confirm('Are you sure you want to delete this trip and all its expenses?')) return;
+        try {
+            await tripsAPI.delete(id);
+            state.trips = state.trips.filter(t => getTripId(t) !== id);
+            if (state.activeTripId === id) {
+                state.activeTripId = state.trips.length > 0 ? getTripId(state.trips[0]) : null;
+                if (state.activeTripId) {
+                    const expenses = await expensesAPI.getAll(state.activeTripId);
+                    state.expenses = expenses;
+                } else {
+                    state.expenses = [];
+                }
+            }
+            saveState();
+            toast('Trip deleted successfully', 'success');
+            navigate('trips');
+        } catch (err) {
+            toast('Failed to delete trip: ' + err.message, 'danger');
+        }
+    }
+
+    // ============================================================
+    // CREATE TRIP
+    // ============================================================
+    async function createTrip(e) {
+        e.preventDefault();
+        const tripData = {
+            destination: document.getElementById('tripDest').value,
+            startDate: document.getElementById('tripStart').value,
+            endDate: document.getElementById('tripEnd').value,
+            budget: parseInt(document.getElementById('tripBudget').value),
+            currency: 'INR',
+            travellers: parseInt(document.getElementById('tripTravellers').value),
+            travelType: document.getElementById('tripType').value
+        };
+        if (new Date(tripData.endDate) <= new Date(tripData.startDate)) {
+            toast('End date must be after start date', 'danger');
+            return;
+        }
+        try {
+            const trip = await tripsAPI.create(tripData);
+            state.trips.push(trip);
+            state.activeTripId = getTripId(trip);
+            saveState();
+            closeModal('tripModal');
+            document.getElementById('tripForm').reset();
+            toast(`${trip.destination} trip created!`, 'success');
+            navigate('dashboard');
+        } catch (err) {
+            toast('Failed to create trip: ' + err.message, 'danger');
+        }
+    }
+
+    // ============================================================
+    // EXPENSES PAGE
+    // ============================================================
+    function renderExpenses() {
+        const t = getTrip();
+        if (!t) {
+            document.getElementById('content').innerHTML = `
+            <div class="card" style="text-align:center;padding:60px;">
+                <i class="fas fa-receipt" style="font-size:48px;color:var(--text3);margin-bottom:16px;display:block;"></i>
+                <h3 style="color:var(--text2);">No active trip</h3>
+                <p style="color:var(--text3);font-size:14px;">Select or create a trip first</p>
+            </div>`;
+            return;
+        }
+        const expenses = getExpenses().sort((a, b) => new Date(b.date) - new Date(a.date));
+        const spent = totalSpent();
+        const catMap = {};
+        expenses.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + e.amount; });
+
+        document.getElementById('content').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div><h2 style="font-size:24px;font-weight:800;">Expenses</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">${t.destination} · Total spent: <strong style="color:var(--danger);">${fmt(spent)}</strong> of ${fmt(t.budget)}</p></div>
+            <button class="btn btn-primary" onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()"><i class="fas fa-plus"></i> Add Expense</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:24px;">
+            ${Object.entries(catMap).sort((a,b) => b[1] - a[1]).map(([k, v]) => {
+                const cat = categories[k] || categories.others;
+                return `<div class="card" style="padding:14px;text-align:center;">
+                    <div class="cat-icon ${cat.class}" style="margin:0 auto 8px;"><i class="fas ${cat.icon}"></i></div>
+                    <div style="font-size:12px;color:var(--text3);">${cat.label}</div>
+                    <div style="font-size:16px;font-weight:800;font-family:'Outfit';margin-top:2px;">${fmt(v)}</div>
+                </div>`;
+            }).join('')}
+        </div>
+
+        <div class="card" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                <h4 style="font-size:15px;font-weight:700;">All Transactions (${expenses.length})</h4>
+            </div>
+            ${expenses.length === 0 ? `<div style="padding:40px;text-align:center;color:var(--text3);font-size:14px;">No expenses yet. Add your first expense!</div>` :
+            expenses.map(e => {
+                const cat = categories[e.category] || categories.others;
+                return `<div class="expense-item">
+                    <div class="cat-icon ${cat.class}" style="margin-right:14px;"><i class="fas ${cat.icon}"></i></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.description}</div>
+                        <div style="font-size:12px;color:var(--text3);">${cat.label} · ${new Date(e.date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+                    </div>
+                    <div style="font-weight:700;font-family:'Outfit';color:var(--danger);margin-right:12px;white-space:nowrap;">-${fmt(e.amount)}</div>
+                    <button onclick="deleteExpense('${e._id || e.id}')" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:6px;border-radius:6px;transition:all 0.2s;" onmouseover="this.style.color='var(--danger)';this.style.background='rgba(239,68,68,0.1)'" onmouseout="this.style.color='var(--text3)';this.style.background='none'"><i class="fas fa-trash-alt" style="font-size:13px;"></i></button>
+                </div>`;
+            }).join('')}
+        </div>`;
+    }
+
+    async function addExpense(e) {
+        e.preventDefault();
+        const expenseData = {
+            tripId: state.activeTripId,
+            category: document.getElementById('expCat').value,
+            description: document.getElementById('expDesc').value,
+            amount: parseInt(document.getElementById('expAmount').value),
+            date: document.getElementById('expDate').value
+        };
+        try {
+            const expense = await expensesAPI.create(expenseData);
+            state.expenses.push(expense);
+            saveState();
+            closeModal('expenseModal');
+            document.getElementById('expenseForm').reset();
+            toast(`${categories[expense.category].label}: ${fmt(expense.amount)} added`, 'success');
+            navigate(state.page);
+            checkBudgetAlerts();
+        } catch (err) {
+            toast('Failed to add expense: ' + err.message, 'danger');
+        }
+    }
+
+    async function deleteExpense(id) {
+        try {
+            await expensesAPI.delete(id);
+            state.expenses = state.expenses.filter(e => e._id !== id && e.id !== id);
+            saveState();
+            toast('Expense deleted', 'info');
+            navigate(state.page);
+        } catch (err) {
+            toast('Failed to delete expense: ' + err.message, 'danger');
+        }
+    }
+
+    function checkBudgetAlerts() {
+        const t = getTrip(); if (!t) return;
+        const pct = Math.round((totalSpent() / t.budget) * 100);
+        if (pct >= 90) toast('Critical: You\'ve used over 90% of your budget!', 'danger');
+        else if (pct >= 75) toast('Warning: Budget usage crossed 75%', 'warning');
+    }
+
+    // ============================================================
+    // ANALYTICS PAGE
+    // ============================================================
+    function renderAnalytics() {
+        const t = getTrip();
+        if (!t) {
+            document.getElementById('content').innerHTML = `<div class="card" style="text-align:center;padding:60px;"><p style="color:var(--text3);">No active trip</p></div>`;
+            return;
+        }
+        const expenses = getExpenses();
+        const spent = totalSpent();
+
+        const catMap = {};
+        expenses.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + e.amount; });
+        const catKeys = Object.keys(catMap).sort((a, b) => catMap[b] - catMap[a]);
+        const catLabels = catKeys.map(k => (categories[k] || categories.others).label);
+        const catValues = catKeys.map(k => catMap[k]);
+        const catColors = catKeys.map(k => ({ food:'#F97316',hotel:'#8B5CF6',transport:'#06B6D4',shopping:'#EC4899',entertainment:'#22C55E',medical:'#EF4444',flight:'#3B82F6',others:'#6B7280' }[k] || '#6B7280'));
+
+        const dayMap = {};
+        expenses.forEach(e => { dayMap[e.date] = (dayMap[e.date] || 0) + e.amount; });
+        const dayLabels = Object.keys(dayMap).sort().map(d => new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short'}));
+        const dayValues = Object.keys(dayMap).sort().map(d => dayMap[d]);
+
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">Analytics</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">${t.destination} trip spending analysis</p></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+            <div class="card fade-up">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Budget vs Expense</h4>
+                <div style="height:240px;"><canvas id="barChart"></canvas></div>
+            </div>
+            <div class="card fade-up fade-up-d1">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Category Distribution</h4>
+                <div style="height:240px;"><canvas id="pieChart"></canvas></div>
+            </div>
+        </div>
+
+        <div class="card fade-up fade-up-d2" style="margin-bottom:24px;">
+            <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Daily Spending Trend</h4>
+            <div style="height:260px;"><canvas id="lineChart"></canvas></div>
+        </div>
+
+        <div class="card fade-up fade-up-d3" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><h4 style="font-size:15px;font-weight:700;">Cost Breakdown</h4></div>
+            <table style="width:100%;border-collapse:collapse;">
+                <thead><tr style="border-bottom:1px solid var(--border);">
+                    <th style="text-align:left;padding:12px 20px;font-size:12px;color:var(--text3);font-weight:600;">Category</th>
+                    <th style="text-align:right;padding:12px 20px;font-size:12px;color:var(--text3);font-weight:600;">Amount</th>
+                    <th style="text-align:right;padding:12px 20px;font-size:12px;color:var(--text3);font-weight:600;">% of Total</th>
+                    <th style="padding:12px 20px;font-size:12px;color:var(--text3);font-weight:600;width:30%;">Share</th>
+                </tr></thead>
+                <tbody>
+                    ${catKeys.map(k => {
+                        const cat = categories[k] || categories.others;
+                        const pct = Math.round((catMap[k] / spent) * 100);
+                        return `<tr style="border-bottom:1px solid var(--border);">
+                            <td style="padding:12px 20px;"><div style="display:flex;align-items:center;gap:10px;"><div class="cat-icon ${cat.class}" style="width:32px;height:32px;font-size:13px;"><i class="fas ${cat.icon}"></i></div><span style="font-size:14px;font-weight:600;">${cat.label}</span></div></td>
+                            <td style="padding:12px 20px;text-align:right;font-family:'Outfit';font-weight:700;">${fmt(catMap[k])}</td>
+                            <td style="padding:12px 20px;text-align:right;color:var(--text2);font-size:14px;">${pct}%</td>
+                            <td style="padding:12px 20px;"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${catColors[catKeys.indexOf(k)]};"></div></div></td>
+                        </tr>`;
+                    }).join('')}
+                    <tr>
+                        <td style="padding:14px 20px;font-weight:800;">Total</td>
+                        <td style="padding:14px 20px;text-align:right;font-family:'Outfit';font-weight:900;color:var(--danger);">${fmt(spent)}</td>
+                        <td style="padding:14px 20px;text-align:right;color:var(--text2);">100%</td>
+                        <td style="padding:14px 20px;"><div class="progress-bar"><div class="progress-fill" style="width:100%;background:var(--danger);"></div></div></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        charts.bar = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['Budget', 'Spent', 'Remaining'],
+                datasets: [{ data: [t.budget, spent, Math.max(0, t.budget - spent)],
+                    backgroundColor: ['rgba(34,197,94,0.7)', 'rgba(239,68,68,0.7)', 'rgba(245,166,35,0.7)'],
+                    borderRadius: 8, borderSkipped: false, barPercentage: 0.5 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+                scales: { x: { grid: { display: false }, ticks: { color: '#8B8DA0', font: { size: 12 } } }, y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8B8DA0', callback: v => '₹' + (v/1000) + 'K' } } } }
+        });
+
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        charts.pie = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: { labels: catLabels, datasets: [{ data: catValues, backgroundColor: catColors, borderWidth: 0, hoverOffset: 8 }] },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '60%', plugins: { legend: { position: 'right', labels: { color: '#8B8DA0', font: { size: 11 }, padding: 10, usePointStyle: true, pointStyleWidth: 8 } } } }
+        });
+
+        const lineCtx = document.getElementById('lineChart').getContext('2d');
+        charts.line = new Chart(lineCtx, {
+            type: 'line',
+            data: {
+                labels: dayLabels,
+                datasets: [{
+                    label: 'Daily Spend', data: dayValues,
+                    borderColor: '#F5A623', backgroundColor: 'rgba(245,166,35,0.08)', fill: true,
+                    tension: 0.4, pointBackgroundColor: '#F5A623', pointRadius: 5, pointHoverRadius: 7, borderWidth: 2.5
+                }, {
+                    label: 'Avg Daily', data: dayLabels.map(() => spent / dayLabels.length),
+                    borderColor: 'rgba(239,68,68,0.5)', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, fill: false
+                }]
+            },
+            options: { responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#8B8DA0', font: { size: 11 }, usePointStyle: true, pointStyleWidth: 8 } } },
+                scales: { x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8B8DA0' } }, y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8B8DA0', callback: v => '₹' + v.toLocaleString('en-IN') } } } }
+        });
+    }
+
+    // ============================================================
+    // AI ADVISOR
+    // ============================================================
+    function renderAdvisor() {
+        const t = getTrip();
+        if (!t) {
+            document.getElementById('content').innerHTML = `<div class="card" style="text-align:center;padding:60px;"><p style="color:var(--text3);">No active trip</p></div>`;
+            return;
+        }
+        const expenses = getExpenses();
+        const spent = totalSpent(), pct = Math.round((spent / t.budget) * 100), remaining = t.budget - spent;
+        const dl = daysLeft(), dailyLimit = dl > 0 ? Math.floor(remaining / dl) : 0;
+        const catMap = {};
+        expenses.forEach(e => { catMap[e.category] = (catMap[e.category] || 0) + e.amount; });
+        const cityKey = t.destination.toLowerCase();
+        const cd = cityData[cityKey];
+
+        const suggestions = [];
+        if (catMap['transport'] && catMap['transport'] > 1500) suggestions.push({ icon: 'fa-metro', color: '#06B6D4', title: 'Use Public Transport', desc: `You've spent ${fmt(catMap['transport'])} on transport. Metro/auto is 60-70% cheaper than cabs for city travel.` });
+        if (catMap['food'] && catMap['food'] > 2000) suggestions.push({ icon: 'fa-utensils', color: '#F97316', title: 'Try Local Street Food', desc: `Instead of restaurants, try street food stalls. You can save 40-50% on food while getting authentic taste.` });
+        if (catMap['shopping'] && catMap['shopping'] > 2000) suggestions.push({ icon: 'fa-shopping-bag', color: '#EC4899', title: 'Reduce Shopping Budget', desc: `You've spent ${fmt(catMap['shopping'])} on shopping. Set a shopping limit and compare prices at 2-3 shops before buying.` });
+        if (catMap['hotel'] && catMap['hotel'] > 4000) suggestions.push({ icon: 'fa-bed', color: '#8B5CF6', title: 'Check Alternative Stays', desc: `Consider hostels, guesthouses, or OYO rooms. They can be 40-60% cheaper than premium hotels.` });
+        if (dl > 0) suggestions.push({ icon: 'fa-calculator', color: '#22C55E', title: 'Today\'s Recommended Budget', desc: `To stay within your total budget, spend no more than ${fmt(dailyLimit)} today. Plan your expenses accordingly.` });
+        if (pct > 70) suggestions.push({ icon: 'fa-exclamation-triangle', color: '#EF4444', title: 'Budget Warning', desc: `You've used ${pct}% of your budget with ${dl} days left. Consider skipping non-essential activities.` });
+        if (cd) suggestions.push({ icon: 'fa-lightbulb', color: '#F5A623', title: `${t.destination} Local Tip`, desc: cd.tips });
+        suggestions.push({ icon: 'fa-camera', color: '#6366F1', title: 'Free Activities', desc: `Look for free walking tours, temple visits, beach sunsets, and local markets — great experiences that cost nothing.` });
+
+        const savingsScore = pct < 40 ? 95 : pct < 50 ? 85 : pct < 60 ? 70 : pct < 75 ? 55 : pct < 85 ? 35 : 15;
+        const savingsLabel = savingsScore >= 80 ? 'Excellent' : savingsScore >= 60 ? 'Good' : savingsScore >= 40 ? 'Average' : 'Poor';
+        const savingsColor = savingsScore >= 80 ? 'var(--success)' : savingsScore >= 60 ? 'var(--accent)' : savingsScore >= 40 ? 'var(--warning)' : 'var(--danger)';
+
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">AI Budget Advisor</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Smart suggestions based on your spending patterns</p></div>
+
+        <div style="display:grid;grid-template-columns:300px 1fr;gap:16px;margin-bottom:24px;">
+            <div class="card fade-up" style="text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div style="position:relative;width:120px;height:120px;">
+                    <svg width="120" height="120" viewBox="0 0 120 120" style="transform:rotate(-90deg);">
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="var(--border)" stroke-width="8"/>
+                        <circle cx="60" cy="60" r="52" fill="none" stroke="${savingsColor}" stroke-width="8" stroke-linecap="round"
+                            stroke-dasharray="${2 * Math.PI * 52}" stroke-dashoffset="${2 * Math.PI * 52 * (1 - savingsScore / 100)}" style="transition:stroke-dashoffset 1.5s ease;"/>
+                    </svg>
+                    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                        <span style="font-size:32px;font-weight:900;font-family:'Outfit';color:${savingsColor};">${savingsScore}</span>
+                        <span style="font-size:11px;color:var(--text3);">Score</span>
+                    </div>
+                </div>
+                <div style="margin-top:12px;font-size:16px;font-weight:700;color:${savingsColor};">${savingsLabel}</div>
+                <div style="font-size:12px;color:var(--text3);margin-top:4px;">Savings Score</div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                <div class="card fade-up fade-up-d1">
+                    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Budget Used</div>
+                    <div style="font-size:24px;font-weight:900;font-family:'Outfit';color:${pct>75?'var(--danger)':'var(--text)'};">${pct}%</div>
+                    <div class="progress-bar" style="margin-top:8px;"><div class="progress-fill" style="width:${pct}%;background:${pct<50?'var(--success)':pct<75?'var(--accent)':'var(--danger)'};"></div></div>
+                </div>
+                <div class="card fade-up fade-up-d2">
+                    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Daily Limit</div>
+                    <div style="font-size:24px;font-weight:900;font-family:'Outfit';">${fmt(dailyLimit)}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:8px;">for ${dl} days remaining</div>
+                </div>
+                <div class="card fade-up fade-up-d3">
+                    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Potential Savings</div>
+                    <div style="font-size:24px;font-weight:900;font-family:'Outfit';color:var(--success);">${fmt(Math.floor(catMap['transport'] * 0.6 + catMap['food'] * 0.3))}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:8px;">if you follow tips</div>
+                </div>
+                <div class="card fade-up fade-up-d4">
+                    <div style="font-size:12px;color:var(--text3);margin-bottom:6px;">Biggest Expense</div>
+                    <div style="font-size:24px;font-weight:900;font-family:'Outfit';">${Object.keys(catMap).length ? (categories[Object.keys(catMap)[0]] || categories.others).label : 'N/A'}</div>
+                    <div style="font-size:12px;color:var(--text3);margin-top:8px;">${Object.keys(catMap).length ? fmt(catMap[Object.keys(catMap)[0]]) : ''}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card fade-up" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;">
+                <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#FF6B35);display:flex;align-items:center;justify-content:center;"><i class="fas fa-robot" style="color:#000;font-size:12px;"></i></div>
+                <h4 style="font-size:15px;font-weight:700;">AI Suggestions (${suggestions.length})</h4>
+            </div>
+            ${suggestions.map((s, i) => `<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;gap:14px;transition:background 0.2s;" onmouseover="this.style.background='var(--card-h)'" onmouseout="this.style.background='transparent'">
+                <div style="width:40px;height:40px;border-radius:10px;background:${s.color}18;color:${s.color};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px;"><i class="fas ${s.icon}"></i></div>
+                <div><div style="font-size:14px;font-weight:700;margin-bottom:4px;">${s.title}</div><p style="font-size:13px;color:var(--text2);line-height:1.5;">${s.desc}</p></div>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    // ============================================================
+    // EXPLORE PAGE
+    // ============================================================
+    function renderExplore() {
+        const t = getTrip();
+        const dest = t ? t.destination : 'Jaipur';
+        const cityKey = dest.toLowerCase();
+        const cd = cityData[cityKey];
+        const allCities = Object.keys(cityData);
+
+        document.getElementById('content').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div><h2 style="font-size:24px;font-weight:800;">Explore ${dest}</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Food, places, weather & local tips</p></div>
+            <select class="input-field" style="width:200px;" onchange="changeExploreCity(this.value)">
+                ${allCities.map(c => `<option ${c === cityKey ? 'selected' : ''}>${c.charAt(0).toUpperCase() + c.slice(1)}</option>`).join('')}
+            </select>
+        </div>
+        ${cd ? `
+        <div class="card fade-up" style="margin-bottom:24px;background:linear-gradient(135deg,#1a2332,#1e2840);border-color:#2a3a52;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;">
+                <div>
+                    <div style="font-size:13px;color:var(--text3);margin-bottom:4px;">Current Weather</div>
+                    <div style="font-size:48px;font-weight:900;font-family:'Outfit';">${cd.weather.temp}°C</div>
+                    <div style="font-size:14px;color:var(--text2);margin-top:4px;"><i class="fas fa-cloud-sun" style="margin-right:6px;color:var(--accent);"></i>${cd.weather.condition}</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div style="text-align:center;"><div style="font-size:12px;color:var(--text3);">Humidity</div><div style="font-size:18px;font-weight:700;font-family:'Outfit';margin-top:2px;">${cd.weather.humidity}%</div></div>
+                    <div style="text-align:center;"><div style="font-size:12px;color:var(--text3);">Rain Chance</div><div style="font-size:18px;font-weight:700;font-family:'Outfit';margin-top:2px;">${cd.weather.rain}%</div></div>
+                    <div style="text-align:center;"><div style="font-size:12px;color:var(--text3);">Sunrise</div><div style="font-size:14px;font-weight:600;margin-top:4px;">${cd.weather.sunrise}</div></div>
+                    <div style="text-align:center;"><div style="font-size:12px;color:var(--text3);">Sunset</div><div style="font-size:14px;font-weight:600;margin-top:4px;">${cd.weather.sunset}</div></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                    <span style="font-size:13px;font-weight:600;color:var(--accent);">Packing Tips</span>
+                    ${cd.packing.map(p => `<span style="font-size:12px;color:var(--text2);"><i class="fas fa-check" style="color:var(--success);margin-right:6px;font-size:10px;"></i>${p}</span>`).join('')}
+                </div>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+            <div class="card fade-up fade-up-d1" style="padding:0;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-utensils" style="color:#F97316;"></i><h4 style="font-size:15px;font-weight:700;">Famous Food</h4>
+                </div>
+                ${cd.food.map((f, i) => `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;transition:background 0.2s;" onmouseover="this.style.background='var(--card-h)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:28px;height:28px;border-radius:8px;background:rgba(249,115,22,0.12);color:#F97316;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;">${i+1}</div>
+                    <span style="font-size:14px;">${f}</span>
+                </div>`).join('')}
+            </div>
+
+            <div class="card fade-up fade-up-d2" style="padding:0;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+                    <i class="fas fa-map-marker-alt" style="color:#EF4444;"></i><h4 style="font-size:15px;font-weight:700;">Famous Places</h4>
+                </div>
+                ${cd.places.map((p, i) => `<div style="padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;transition:background 0.2s;" onmouseover="this.style.background='var(--card-h)'" onmouseout="this.style.background='transparent'">
+                    <div style="width:28px;height:28px;border-radius:8px;background:rgba(239,68,68,0.12);color:#EF4444;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;flex-shrink:0;">${i+1}</div>
+                    <span style="font-size:14px;">${p}</span>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div class="card fade-up fade-up-d3">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;"><i class="fas fa-lightbulb" style="color:var(--accent);"></i><h4 style="font-size:15px;font-weight:700;">Local Tips</h4></div>
+            <p style="font-size:14px;color:var(--text2);line-height:1.7;">${cd.tips}</p>
+        </div>` : `<div class="card" style="text-align:center;padding:40px;"><p style="color:var(--text3);">No data available for this destination</p></div>`}`;
+    }
+
+    function changeExploreCity(city) {
+        const t = getTrip();
+        const origDest = t ? t.destination : 'Jaipur';
+        if (t) t.destination = city;
+        renderExplore();
+        if (t) t.destination = origDest;
+    }
+
+    // ============================================================
+    // ITINERARY
+    // ============================================================
+    function renderItinerary() {
+        const t = getTrip();
+        const dest = t ? t.destination : 'Jaipur';
+        const cityKey = dest.toLowerCase();
+        const cd = cityData[cityKey];
+        const places = cd ? cd.places : ['Heritage Site', 'Local Market', 'Temple', 'Garden', 'Museum'];
+        const food = cd ? cd.food.map(f => f.split('—')[0].trim()) : ['Local Breakfast', 'Street Food', 'Traditional Lunch'];
+
+        const itinerary = [
+            { time: '7:00 AM', title: 'Morning Walk & Tea', desc: 'Start your day with a walk and local chai', icon: 'fa-mug-hot', color: '#F97316' },
+            { time: '8:30 AM', title: `Breakfast: ${food[0] || 'Local Dish'}`, desc: 'Fuel up for the day ahead', icon: 'fa-utensils', color: '#22C55E' },
+            { time: '10:00 AM', title: `Visit ${places[0] || 'Heritage Site'}`, desc: 'Explore the iconic landmark', icon: 'fa-landmark', color: '#8B5CF6' },
+            { time: '12:30 PM', title: `Lunch: ${food[1] || 'Local Restaurant'}`, desc: 'Try the local cuisine', icon: 'fa-utensils', color: '#22C55E' },
+            { time: '2:30 PM', title: `Explore ${places[1] || 'Local Market'}`, desc: 'Shopping and local experiences', icon: 'fa-shopping-bag', color: '#EC4899' },
+            { time: '5:00 PM', title: `Visit ${places[2] || 'Temple/Garden'}`, desc: 'Evening exploration', icon: 'fa-camera', color: '#06B6D4' },
+            { time: '7:00 PM', title: `Snacks: ${food[2] || 'Evening Snacks'}`, desc: 'Evening street food', icon: 'fa-ice-cream', color: '#F97316' },
+            { time: '8:30 PM', title: `Visit ${places[3] || 'Evening Viewpoint'}`, desc: 'Sunset/night view', icon: 'fa-moon', color: '#6366F1' },
+            { time: '10:00 PM', title: 'Dinner & Rest', desc: 'End the day with a good meal', icon: 'fa-bed', color: '#8B5CF6' },
+        ];
+
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">Daily Itinerary</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Suggested day plan for ${dest}</p></div>
+        <div class="card fade-up" style="max-width:700px;">
+            ${itinerary.map(item => `<div class="timeline-item">
+                <div class="timeline-dot" style="background:${item.color};"></div>
+                <div style="display:flex;align-items:start;gap:12px;">
+                    <div style="min-width:70px;"><div style="font-size:13px;font-weight:700;color:${item.color};font-family:'Outfit';">${item.time}</div></div>
+                    <div style="width:36px;height:36px;border-radius:10px;background:${item.color}18;color:${item.color};display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas ${item.icon}" style="font-size:14px;"></i></div>
+                    <div><div style="font-size:14px;font-weight:700;">${item.title}</div><div style="font-size:13px;color:var(--text2);margin-top:2px;">${item.desc}</div></div>
+                </div>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    // ============================================================
+    // SPLIT EXPENSES
+    // ============================================================
+    function renderSplit() {
+        const payments = state.splitPayments;
+        const members = state.splitMembers;
+        const total = payments.reduce((s, p) => s + p.amount, 0);
+        const perPerson = Math.floor(total / members.length);
+        const balances = {};
+        members.forEach(m => balances[m] = 0);
+        payments.forEach(p => { balances[p.member] = (balances[p.member] || 0) + p.amount; });
+        members.forEach(m => balances[m] -= perPerson);
+
+        const debtors = [], creditors = [];
+        members.forEach(m => { if (balances[m] < 0) debtors.push({ name: m, amount: Math.abs(balances[m]) }); if (balances[m] > 0) creditors.push({ name: m, amount: balances[m] }); });
+        const settlements = [];
+        let i = 0, j = 0;
+        while (i < debtors.length && j < creditors.length) {
+            const amount = Math.min(debtors[i].amount, creditors[j].amount);
+            if (amount > 0) settlements.push({ from: debtors[i].name, to: creditors[j].name, amount });
+            debtors[i].amount -= amount; creditors[j].amount -= amount;
+            if (debtors[i].amount === 0) i++; if (creditors[j].amount === 0) j++;
+        }
+
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">Split Expenses</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Fair expense sharing with friends</p></div>
+
+        <div class="card fade-up" style="margin-bottom:24px;">
+            <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Add Payment</h4>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+                <div style="flex:1;min-width:140px;"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px;">Who paid?</label>
+                    <select class="input-field" id="splitWho">${members.map(m => `<option>${m}</option>`).join('')}</select></div>
+                <div style="flex:1;min-width:140px;"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px;">Amount</label>
+                    <input type="number" class="input-field" id="splitAmt" placeholder="5000"></div>
+                <div style="flex:2;min-width:200px;"><label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px;">Description</label>
+                    <input type="text" class="input-field" id="splitDesc" placeholder="Flight tickets"></div>
+                <button class="btn btn-primary" onclick="addSplitPayment()"><i class="fas fa-plus"></i> Add</button>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px;">
+            <div class="card fade-up fade-up-d1" style="padding:0;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                    <h4 style="font-size:15px;font-weight:700;">Balances</h4>
+                    <span class="badge badge-amber">${fmt(total)} total</span>
+                </div>
+                ${members.map(m => `<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:32px;height:32px;border-radius:8px;background:${balances[m] >= 0 ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)'};color:${balances[m] >= 0 ? 'var(--success)' : 'var(--danger)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;">${m[0]}</div>
+                        <span style="font-weight:600;">${m}</span>
+                    </div>
+                    <span style="font-weight:700;font-family:'Outfit';color:${balances[m] >= 0 ? 'var(--success)' : 'var(--danger)'};">${balances[m] >= 0 ? '+' : ''}${fmt(balances[m])}</span>
+                </div>`).join('')}
+                <div style="padding:12px 20px;background:var(--bg);font-size:12px;color:var(--text3);text-align:center;">Each person's share: ${fmt(perPerson)}</div>
+            </div>
+
+            <div class="card fade-up fade-up-d2" style="padding:0;overflow:hidden;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><h4 style="font-size:15px;font-weight:700;">Settlements</h4></div>
+                ${settlements.length === 0 ? `<div style="padding:40px;text-align:center;color:var(--text3);font-size:14px;">All settled up! No payments needed.</div>` :
+                settlements.map(s => `<div style="padding:16px 20px;border-bottom:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;gap:8px;justify-content:center;">
+                        <span style="font-weight:700;">${s.from}</span>
+                        <i class="fas fa-arrow-right" style="color:var(--accent);font-size:12px;"></i>
+                        <span style="font-weight:700;">${s.to}</span>
+                    </div>
+                    <div style="text-align:center;margin-top:8px;"><span style="font-size:24px;font-weight:900;font-family:'Outfit';color:var(--accent);">${fmt(s.amount)}</span></div>
+                    <div style="text-align:center;margin-top:4px;font-size:12px;color:var(--text3);">should pay</div>
+                </div>`).join('')}
+            </div>
+        </div>
+
+        <div class="card fade-up fade-up-d3" style="padding:0;overflow:hidden;">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--border);"><h4 style="font-size:15px;font-weight:700;">Payment History</h4></div>
+            ${payments.length === 0 ? `<div style="padding:30px;text-align:center;color:var(--text3);font-size:14px;">No payments added yet</div>` :
+            payments.map(p => `<div class="expense-item">
+                <div style="width:36px;height:36px;border-radius:8px;background:rgba(245,166,35,0.12);color:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;margin-right:12px;">${p.member[0]}</div>
+                <div style="flex:1;"><div style="font-weight:600;">${p.desc}</div><div style="font-size:12px;color:var(--text3);">Paid by ${p.member}</div></div>
+                <div style="font-weight:700;font-family:'Outfit';">${fmt(p.amount)}</div>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    function addSplitPayment() {
+        const who = document.getElementById('splitWho').value;
+        const amt = parseInt(document.getElementById('splitAmt').value);
+        const desc = document.getElementById('splitDesc').value;
+        if (!amt || amt <= 0) { toast('Enter a valid amount', 'danger'); return; }
+        if (!desc.trim()) { toast('Enter a description', 'danger'); return; }
+        state.splitPayments.push({ member: who, amount: amt, desc: desc.trim() });
+        saveState();
+        toast(`${who} paid ${fmt(amt)} for ${desc}`, 'success');
+        renderSplit();
+    }
+
+    // ============================================================
+    // CURRENCY CONVERTER
+    // ============================================================
+    function renderConverter() {
+        const curKeys = Object.keys(currencies);
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">Currency Converter</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">Convert between popular travel currencies</p></div>
+        <div class="card fade-up" style="max-width:600px;margin-bottom:24px;">
+            <div style="display:grid;gap:20px;">
+                <div>
+                    <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">From</label>
+                    <div style="display:flex;gap:10px;">
+                        <select class="input-field" id="convFrom" style="width:140px;" onchange="convertCurrency()">${curKeys.map(c => `<option value="${c}" ${c==='INR'?'selected':''}>${c} (${currencies[c].symbol})</option>`).join('')}</select>
+                        <input type="number" class="input-field" id="convAmount" value="10000" oninput="convertCurrency()" style="flex:1;">
+                    </div>
+                </div>
+                <div style="text-align:center;"><button onclick="swapCurrency()" style="background:var(--card-h);border:1px solid var(--border);color:var(--text2);width:40px;height:40px;border-radius:10px;cursor:pointer;font-size:16px;transition:all 0.2s;" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'"><i class="fas fa-exchange-alt fa-rotate-90"></i></button></div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">To</label>
+                    <div style="display:flex;gap:10px;">
+                        <select class="input-field" id="convTo" style="width:140px;" onchange="convertCurrency()">${curKeys.map(c => `<option value="${c}" ${c==='USD'?'selected':''}>${c} (${currencies[c].symbol})</option>`).join('')}</select>
+                        <input type="text" class="input-field" id="convResult" readonly style="flex:1;font-weight:700;font-size:18px;font-family:'Outfit';">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card fade-up fade-up-d1" style="max-width:600px;">
+            <h4 style="font-size:15px;font-weight:700;margin-bottom:16px;">Quick Reference (1 INR)</h4>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                ${curKeys.filter(c => c !== 'INR').map(c => `<div style="display:flex;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--bg);border:1px solid var(--border);">
+                    <span style="font-size:14px;font-weight:600;">${c}</span>
+                    <span style="font-size:14px;font-family:'Outfit';color:var(--accent);font-weight:600;">${currencies[c].rate}</span>
+                </div>`).join('')}
+            </div>
+        </div>`;
+        convertCurrency();
+    }
+
+    function convertCurrency() {
+        const from = document.getElementById('convFrom').value;
+        const to = document.getElementById('convTo').value;
+        const amount = parseFloat(document.getElementById('convAmount').value) || 0;
+        const inINR = amount / currencies[from].rate;
+        const result = inINR * currencies[to].rate;
+        document.getElementById('convResult').value = currencies[to].symbol + ' ' + result.toFixed(2);
+    }
+
+    function swapCurrency() {
+        const from = document.getElementById('convFrom');
+        const to = document.getElementById('convTo');
+        [from.value, to.value] = [to.value, from.value];
+        convertCurrency();
+    }
+
+    // ============================================================
+    // PACKING CHECKLIST
+    // ============================================================
+    function renderPacking() {
+        const done = state.packingItems.filter(i => i.done).length;
+        const total = state.packingItems.length;
+        const pct = Math.round((done / total) * 100);
+
+        document.getElementById('content').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div><h2 style="font-size:24px;font-weight:800;">Packing Checklist</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">${done}/${total} items packed (${pct}%)</p></div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-ghost btn-sm" onclick="savePackingToBackend()"><i class="fas fa-save"></i> Save</button>
+                <button class="btn btn-ghost btn-sm" onclick="addPackingItem()"><i class="fas fa-plus"></i> Add Item</button>
+            </div>
+        </div>
+        <div class="card fade-up" style="margin-bottom:24px;">
+            <div class="progress-bar" style="height:8px;"><div class="progress-fill" style="width:${pct}%;background:var(--success);"></div></div>
+        </div>
+        <div class="card fade-up fade-up-d1" style="padding:8px;">
+            ${state.packingItems.map(item => `<div class="check-item ${item.done ? 'done' : ''}" onclick="togglePacking(${item.id || item._id})">
+                <div class="check-box ${item.done ? 'checked' : ''}"><i class="fas fa-check" style="font-size:11px;${item.done ? '' : 'display:none'}"></i></div>
+                <span class="check-label" style="font-size:14px;flex:1;">${item.text}</span>
+                <button onclick="event.stopPropagation();removePackingItem(${item.id || item._id})" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:4px 8px;border-radius:4px;transition:all 0.2s;" onmouseover="this.style.color='var(--danger)'" onmouseout="this.style.color='var(--text3)'"><i class="fas fa-times" style="font-size:12px;"></i></button>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    function togglePacking(id) {
+        const item = state.packingItems.find(i => (i.id || i._id) === id);
+        if (item) item.done = !item.done;
+        saveState();
+        renderPacking();
+    }
+
+    function removePackingItem(id) {
+        state.packingItems = state.packingItems.filter(i => (i.id || i._id) !== id);
+        saveState();
+        renderPacking();
+    }
+
+    function addPackingItem() {
+        const container = document.createElement('div');
+        container.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:200;display:flex;align-items:center;justify-content:center;">
+            <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;width:90%;max-width:400px;">
+                <h4 style="font-size:16px;font-weight:700;margin-bottom:16px;">Add Packing Item</h4>
+                <input type="text" class="input-field" id="newPackItem" placeholder="Enter item name..." autofocus>
+                <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
+                    <button class="btn btn-ghost btn-sm" onclick="this.closest('div[style*=fixed]').remove()">Cancel</button>
+                    <button class="btn btn-primary btn-sm" onclick="confirmAddPacking()">Add</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(container.firstElementChild);
+        setTimeout(() => document.getElementById('newPackItem').focus(), 100);
+    }
+
+    function confirmAddPacking() {
+        const input = document.getElementById('newPackItem');
+        if (input && input.value.trim()) {
+            state.packingItems.push({ id: Date.now(), text: input.value.trim(), done: false });
+            saveState();
+            renderPacking();
+            savePackingToBackend();
+        }
+        document.querySelector('div[style*="position:fixed"][style*="inset:0"]').remove();
+    }
+
+    async function savePackingToBackend() {
+        if (!state.activeTripId) {
+            toast('No active trip to save packing list', 'warning');
+            return;
+        }
+        try {
+            await packingAPI.update(state.activeTripId, state.packingItems);
+            toast('Packing list saved!', 'success');
+        } catch (err) {
+            toast('Failed to save packing list: ' + err.message, 'danger');
+        }
+    }
+
+    // ============================================================
+    // BADGES
+    // ============================================================
+    function renderBadges() {
+        document.getElementById('content').innerHTML = `
+        <div style="margin-bottom:24px;"><h2 style="font-size:24px;font-weight:800;">Badges & Achievements</h2><p style="color:var(--text2);font-size:14px;margin-top:4px;">${state.badges.filter(b => b.unlocked).length}/${state.badges.length} unlocked</p></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;">
+            ${state.badges.map(b => `<div class="card fade-up" style="text-align:center;${b.unlocked ? '' : 'opacity:0.4;filter:grayscale(1);'}">
+                <div style="width:64px;height:64px;border-radius:16px;background:${b.color}18;color:${b.color};display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px;"><i class="fas ${b.icon}"></i></div>
+                <h4 style="font-size:15px;font-weight:700;">${b.name}</h4>
+                <p style="font-size:12px;color:var(--text3);margin-top:4px;">${b.desc}</p>
+                ${b.unlocked ? '<span class="badge badge-green" style="margin-top:10px;"><i class="fas fa-check" style="font-size:10px;margin-right:4px;"></i>Unlocked</span>' : '<span class="badge" style="margin-top:10px;background:var(--border);color:var(--text3);"><i class="fas fa-lock" style="font-size:10px;margin-right:4px;"></i>Locked</span>'}
+            </div>`).join('')}
+        </div>`;
+    }
+
+    // ============================================================
+    // CHATBOT
+    // ============================================================
+    function toggleChat() {
+        state.chatOpen = !state.chatOpen;
+        document.getElementById('chatWindow').classList.toggle('open', state.chatOpen);
+        document.getElementById('chatToggle').innerHTML = state.chatOpen ? '<i class="fas fa-times"></i>' : '<i class="fas fa-comment-dots"></i>';
+        if (state.chatOpen) {
+            setTimeout(() => document.getElementById('chatInput').focus(), 300);
+        }
+    }
+
+    function sendChat() {
+        const input = document.getElementById('chatInput');
+        const msg = input.value.trim();
+        if (!msg) return;
+        addChatMsg(msg, 'user');
+        input.value = '';
+        setTimeout(() => addChatMsg(getAIResponse(msg), 'bot'), 500 + Math.random() * 500);
+    }
+
+    function addChatMsg(text, type) {
+        const container = document.getElementById('chatMessages');
+        const div = document.createElement('div');
+        div.className = `chat-msg ${type}`;
+        div.textContent = text;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function getAIResponse(message) {
+        const msg = message.toLowerCase();
+        const t = getTrip();
+        const tripDest = t ? t.destination : '';
+        const tripCityKey = tripDest.toLowerCase();
+        const spent = t ? totalSpent() : 0;
+        const budget = t ? t.budget : 0;
+        const pct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+
+        if (msg.match(/^(hi|hello|hey|namaste|namaskar)/)) {
+            return `Namaste! How can I help you with your ${tripDest || 'travel'} trip? Ask me about food, places, budget tips, weather, or anything!`;
+        }
+
+        if (msg.includes('budget') || msg.includes('spend') || msg.includes('money') || msg.includes('paisa')) {
+            if (!t) return 'Please create a trip first to get budget insights!';
+            const remaining = budget - spent;
+            const dl = daysLeft();
+            const daily = dl > 0 ? Math.floor(remaining / dl) : 0;
+            return `Budget Update for ${tripDest}:\n\nTotal Budget: ${fmt(budget)}\nSpent: ${fmt(spent)} (${pct}%)\nRemaining: ${fmt(remaining)}\nDays Left: ${dl}\nDaily Limit: ${fmt(daily)}\n\n${pct > 75 ? 'Warning: You need to control spending!' : pct > 50 ? 'You\'re halfway through your budget. Be mindful.' : 'Great! You\'re spending well within limits.'}`;
+        }
+
+        if (msg.includes('food') || msg.includes('eat') || msg.includes('restaurant') || msg.includes('khana') || msg.includes('meal')) {
+            for (const city in cityData) {
+                if (msg.includes(city)) {
+                    return `Must-try foods in ${city.charAt(0).toUpperCase() + city.slice(1)}:\n\n${cityData[city].food.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n\nTip: Try street food for authentic taste at low prices!`;
+                }
+            }
+            if (tripCityKey && cityData[tripCityKey]) {
+                return `Must-try foods in ${tripDest}:\n\n${cityData[tripCityKey].food.map((f, i) => `${i + 1}. ${f}`).join('\n')}\n\nTip: Try street food for authentic taste at low prices!`;
+            }
+            return 'Tell me which city you\'re interested in, and I\'ll suggest the best foods there!';
+        }
+
+        if (msg.includes('place') || msg.includes('visit') || msg.includes('see') || msg.includes('sight') || msg.includes('ghumna')) {
+            for (const city in cityData) {
+                if (msg.includes(city)) {
+                    return `Top places to visit in ${city.charAt(0).toUpperCase() + city.slice(1)}:\n\n${cityData[city].places.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nTip: Visit popular places early morning to avoid crowds!`;
+                }
+            }
+            if (tripCityKey && cityData[tripCityKey]) {
+                return `Top places in ${tripDest}:\n\n${cityData[tripCityKey].places.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+            }
+            return 'Which city would you like to explore? I can suggest famous places!';
+        }
+
+        if (msg.includes('weather') || msg.includes('mausam') || msg.includes('temperature') || msg.includes('rain')) {
+            for (const city in cityData) {
+                if (msg.includes(city)) {
+                    const w = cityData[city].weather;
+                    return `Weather in ${city.charAt(0).toUpperCase() + city.slice(1)}:\n\nTemperature: ${w.temp}°C\nCondition: ${w.condition}\nHumidity: ${w.humidity}%\nRain Chance: ${w.rain}%\nSunrise: ${w.sunrise}\nSunset: ${w.sunset}\n\nPacking: ${cityData[city].packing.join(', ')}`;
+                }
+            }
+            if (tripCityKey && cityData[tripCityKey]) {
+                const w = cityData[tripCityKey].weather;
+                return `Current weather in ${tripDest}:\n\n${w.temp}°C, ${w.condition}\nHumidity: ${w.humidity}%, Rain: ${w.rain}%\n\nSuggested: ${cityData[tripCityKey].packing.join(', ')}`;
+            }
+            return 'Which city\'s weather would you like to know?';
+        }
+
+        if (msg.includes('under') || msg.includes('below') || msg.includes('cheap') || msg.includes('sasta') || msg.includes('budget')) {
+            const match = msg.match(/[\d]+/);
+            const amount = match ? parseInt(match[0]) : 500;
+            return `Here are things to do under ${fmt(amount)} in ${tripDest || 'most Indian cities'}:\n\n1. Street food stalls (${fmt(Math.floor(amount * 0.2))})\n2. Local temple/mosque visits (Free)\n3. Public garden/park (Free)\n4. Museum entry (${fmt(Math.floor(amount * 0.3))})\n5. Local market walking tour (Free-${fmt(Math.floor(amount * 0.1))})\n6. Auto/rickshaw ride (${fmt(Math.floor(amount * 0.15))})\n7. Street shopping (${fmt(amount)})\n8. Boat ride if available (${fmt(Math.floor(amount * 0.5))})`;
+        }
+
+        if (msg.includes('hidden') || msg.includes('secret') || msg.includes('offbeat')) {
+            return `Hidden Gems Tips:\n\n1. Ask local auto drivers for lesser-known viewpoints\n2. Visit old city areas early morning\n3. Check Google Maps for "Cafes near me" with low ratings but great photos\n4. Walk through residential areas for authentic local life\n5. Visit during weekdays to avoid tourist crowds\n6. Try food at places where locals are eating, not tourists`;
+        }
+
+        if (msg.includes('save') || msg.includes('tip') || msg.includes('advice') || msg.includes('suggestion')) {
+            return `Money-Saving Travel Tips:\n\n1. Use public transport over cabs (save 60-70%)\n2. Eat at local dhabas instead of restaurants\n3. Book hotels in advance for better rates\n4. Travel during off-season for 30-50% savings\n5. Bargain at markets (start at 40% of quoted price)\n6. Carry water bottle to avoid buying frequently\n7. Use apps for bus/train tickets (cheaper than last-minute)\n8. Share rides with fellow travellers`;
+        }
+
+        if (msg.includes('transport') || msg.includes('cab') || msg.includes('metro') || msg.includes('bus') || msg.includes('travel')) {
+            return `Transport Tips for ${tripDest || 'Indian cities'}:\n\n1. Metro is cheapest and fastest (where available)\n2. Auto/rickshaw: Always ask for meter or fix price before riding\n3. Ola/Uber: Use pool/share for 30-40% savings\n4. Local buses: Cheapest option, great for budget travel\n5. Rent a scooter: ~₹300-500/day, best for exploring\n6. Walking: Free and you discover hidden gems!`;
+        }
+
+        if (msg.includes('hotel') || msg.includes('stay') || msg.includes('room') || msg.includes('accommodation')) {
+            return `Accommodation Tips:\n\n1. OYO Rooms: Budget-friendly, starting ₹500-800\n2. Hostels: ₹300-600/bed, great for solo travellers\n3. Zostel: Premium backpacker hostels\n4. Airbnb: Good for groups, can cook to save on food\n5. Guesthouses: Local experience, cheaper than hotels\n6. Book 2-3 days in advance for best rates\n7. Check reviews on Google Maps before booking`;
+        }
+
+        if (msg.includes('itinerary') || msg.includes('plan') || msg.includes('schedule') || msg.includes('routine')) {
+            if (tripCityKey && cityData[tripCityKey]) {
+                const p = cityData[tripCityKey].places;
+                const f = cityData[tripCityKey].food;
+                return `Suggested Itinerary for ${tripDest}:\n\n7:00 AM - Morning walk & tea\n8:30 AM - Breakfast: ${f[0] || 'Local dish'}\n10:00 AM - Visit ${p[0] || 'Main attraction'}\n12:30 PM - Lunch: ${f[1] || 'Local restaurant'}\n2:30 PM - Explore ${p[1] || 'Local market'}\n5:00 PM - Visit ${p[2] || 'Temple/Garden'}\n7:00 PM - Snacks: ${f[2] || 'Street food'}\n8:30 PM - Visit ${p[3] || 'Evening spot'}\n10:00 PM - Dinner & rest`;
+            }
+            return 'Check the Itinerary section for a detailed day plan of your trip!';
+        }
+
+        if (msg.includes('thank') || msg.includes('shukriya') || msg.includes('dhanyavaad')) {
+            return 'You\'re welcome! Happy travelling! Feel free to ask anything else.';
+        }
+
+        return `I can help you with:\n\n- "Budget status" — Check your spending\n- "Food in Jaipur" — Famous foods\n- "Places to visit in Delhi" — Tourist spots\n- "Weather in Goa" — Current weather\n- "Tips under ₹500" — Budget activities\n- "Hidden gems" — Offbeat suggestions\n- "How to save money" — Travel tips\n- "Transport tips" — Getting around\n- "Hotel suggestions" — Where to stay\n\nJust ask me anything about your trip!`;
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    window.addEventListener('DOMContentLoaded', () => {
+        setTimeout(() => {
+            document.getElementById('splash').classList.add('hide');
+            document.getElementById('app').style.opacity = '1';
+            document.getElementById('app').style.transition = 'opacity 0.5s';
+        }, 2000);
+
+        // Set default dates
+        const today = todayStr();
+        const nextWeek = new Date(); nextWeek.setDate(nextWeek.getDate() + 5);
+        document.getElementById('tripStart').value = today;
+        document.getElementById('tripEnd').value = nextWeek.toISOString().split('T')[0];
+        document.getElementById('expDate').value = today;
+
+        // Check authentication
+        if (authAPI.isLoggedIn()) {
+            loadState();
+            updateUserUI();
+            loadAllData().then(() => {
+                setTimeout(() => navigate('dashboard'), 100);
+            });
+        } else {
+            // Load local data for demo
+            loadState();
+            if (state.trips.length === 0) seedData();
+            updateUserUI();
+            setTimeout(() => navigate('dashboard'), 100);
+            // Show login modal after a moment
+            setTimeout(() => showAuthModal(), 1500);
+        }
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            document.getElementById('sidebar').classList.remove('mobile-open');
+            document.getElementById('mobileOverlay').classList.remove('show');
+        }
+    });
+
+    console.log('%c TravelOS v2.0 ', 'background:#F5A623;color:#000;font-size:20px;font-weight:bold;padding:10px;border-radius:8px;');
+    console.log('%c Full-stack Travel Companion with AI ', 'color:#8B8DA0;font-size:14px;');
+    console.log('📖 API URL:', API_URL);
+    console.log('🔑 Logged in:', authAPI.isLoggedIn());
+    console.log('📦 Trips:', state.trips.length);
+    console.log('💰 Expenses:', state.expenses.length);
+    </script>
+</body>
+</html>
