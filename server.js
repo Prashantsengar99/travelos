@@ -4,20 +4,11 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
-const path = require('path'); // ✅ IMPORTANT - Upar lao
+const path = require('path');
 
 dotenv.config();
 
 const app = express();
-
-// ============ STATIC FILES SERVE ============
-// ✅ Ye code sabse upar aana chahiye
-app.use(express.static(path.join(__dirname)));
-
-// Serve index.html on root route
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
 
 // ============ CORS ============
 app.use(cors({
@@ -42,12 +33,11 @@ mongoose.connect(MONGODB_URI, {
 })
 .catch(err => {
     console.error('❌ MongoDB Connection Error:', err.message);
-    // process.exit(1) hatana hai taaki server crash na ho
 });
 
 // ============ SCHEMAS (MODELS) ============
+// (UserSchema, TripSchema, ExpenseSchema - aapke code ke hisaab se rakhein)
 
-// User Schema
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -55,7 +45,6 @@ const UserSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Trip Schema
 const TripSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     destination: { type: String, required: true },
@@ -68,7 +57,6 @@ const TripSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Expense Schema
 const ExpenseSchema = new mongoose.Schema({
     tripId: { type: mongoose.Schema.Types.ObjectId, ref: 'Trip', required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -79,13 +67,11 @@ const ExpenseSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// Create Models
 const User = mongoose.model('User', UserSchema);
 const Trip = mongoose.model('Trip', TripSchema);
 const Expense = mongoose.model('Expense', ExpenseSchema);
 
 // ============ AUTH ============
-
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -161,7 +147,6 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ============ AUTH MIDDLEWARE ============
-
 const auth = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
@@ -188,7 +173,8 @@ const auth = async (req, res, next) => {
     }
 };
 
-// ============ TRIPS ============
+// ============ API ROUTES ============
+// (Aapke saare API routes yahan aayenge - trips, expenses, analytics, packing, weather, health)
 
 app.get('/api/trips', auth, async (req, res) => {
     try {
@@ -222,8 +208,6 @@ app.delete('/api/trips/:id', auth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// ============ EXPENSES ============
 
 app.get('/api/expenses', auth, async (req, res) => {
     try {
@@ -260,8 +244,6 @@ app.delete('/api/expenses/:id', auth, async (req, res) => {
     }
 });
 
-// ============ EXPENSE SUMMARY ============
-
 app.get('/api/expenses/summary/:tripId', auth, async (req, res) => {
     try {
         const expenses = await Expense.find({ tripId: req.params.tripId, userId: req.user._id });
@@ -278,8 +260,6 @@ app.get('/api/expenses/summary/:tripId', auth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// ============ ANALYTICS ============
 
 app.get('/api/analytics/:tripId', auth, async (req, res) => {
     try {
@@ -315,8 +295,6 @@ app.get('/api/analytics/:tripId', auth, async (req, res) => {
     }
 });
 
-// ============ PACKING ============
-
 app.get('/api/packing/:tripId', auth, async (req, res) => {
     try {
         const defaultItems = [
@@ -344,8 +322,6 @@ app.put('/api/packing/:tripId', auth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// ============ WEATHER API ============
 
 app.get('/api/weather/:city', async (req, res) => {
     try {
@@ -418,8 +394,6 @@ app.get('/api/weather/:city', async (req, res) => {
     }
 });
 
-// ============ HEALTH CHECK ============
-
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
@@ -427,6 +401,17 @@ app.get('/api/health', (req, res) => {
         database: mongoose.connection.db?.databaseName || 'unknown',
         timestamp: new Date().toISOString()
     });
+});
+
+// ============ STATIC FILES SERVE - SAB SE NECHE ============
+// ✅ Pehle saare API routes handle karo, phir static files
+
+// Serve static files from root directory
+app.use(express.static(path.join(__dirname)));
+
+// Agar koi file nahi milti (404), toh index.html bhejo (SPA support)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // ============ START SERVER ============
