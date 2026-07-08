@@ -460,7 +460,10 @@ app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
             categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
         });
         
-        const doc = new PDFDocument({ margin: 50 });
+        const doc = new PDFDocument({ 
+            margin: 50,
+            size: 'A4'
+        });
         const filename = `trip-summary-${trip.destination}-${Date.now()}.pdf`;
         
         res.setHeader('Content-Type', 'application/pdf');
@@ -468,119 +471,259 @@ app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
         
         doc.pipe(res);
         
-        // Header
-        doc.fontSize(24)
-           .fillColor('#F5A623')
+        // ============ COLORS ============
+        const colors = {
+            primary: '#F5A623',
+            secondary: '#333333',
+            text: '#444444',
+            light: '#888888',
+            border: '#DDDDDD',
+            success: '#22C55E',
+            danger: '#EF4444',
+            warning: '#F97316'
+        };
+        
+        // ============ HEADER ============
+        doc.fontSize(28)
+           .fillColor(colors.primary)
            .text('TravelOS', { align: 'center' });
         
-        doc.fontSize(18)
-           .fillColor('#333')
+        doc.fontSize(20)
+           .fillColor(colors.secondary)
            .text(`Trip Summary: ${trip.destination}`, { align: 'center' });
         
+        doc.moveDown(0.5);
+        
+        // Divider line
+        doc.moveTo(50, doc.y)
+           .lineTo(550, doc.y)
+           .strokeColor(colors.border)
+           .stroke();
         doc.moveDown();
         
-        // Trip Details
+        // ============ TRIP DETAILS ============
         doc.fontSize(14)
-           .fillColor('#555')
-           .text('Trip Details', { underline: true });
+           .fillColor(colors.primary)
+           .text('📋 Trip Details', { underline: true });
+        doc.moveDown(0.3);
         
-        doc.fontSize(12)
-           .fillColor('#333')
-           .text(`📍 Destination: ${trip.destination}`)
-           .text(`📅 Dates: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`)
-           .text(`👥 Travellers: ${trip.travellers}`)
-           .text(`🏷️ Travel Type: ${trip.travelType}`)
-           .text(`💰 Total Budget: ₹${trip.budget.toLocaleString()}`);
+        doc.fontSize(11)
+           .fillColor(colors.text)
+           .text(`Destination: ${trip.destination}`)
+           .text(`Dates: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`)
+           .text(`Travellers: ${trip.travellers}`)
+           .text(`Travel Type: ${trip.travelType}`)
+           .text(`Total Budget: ₹${trip.budget.toLocaleString()}`);
         
         doc.moveDown();
         
-        // Budget Summary
+        // ============ BUDGET SUMMARY ============
         doc.fontSize(14)
-           .fillColor('#555')
-           .text('Budget Summary', { underline: true });
+           .fillColor(colors.primary)
+           .text('💰 Budget Summary', { underline: true });
+        doc.moveDown(0.3);
         
-        doc.fontSize(12)
-           .fillColor('#333')
-           .text(`Total Spent: ₹${totalSpent.toLocaleString()}`)
-           .text(`Remaining: ₹${remaining.toLocaleString()}`)
-           .text(`Budget Used: ${pct}%`);
+        // Budget cards
+        const cardWidth = 150;
+        const cardHeight = 50;
+        const cardSpacing = 20;
+        const startX = 50;
+        let cardY = doc.y;
         
-        // Progress bar
-        const barWidth = 400;
-        const barHeight = 20;
+        // Card 1: Total Spent
+        doc.rect(startX, cardY, cardWidth, cardHeight)
+           .fillColor('#fef2f2')
+           .fill();
+        doc.rect(startX, cardY, cardWidth, cardHeight)
+           .strokeColor(colors.danger)
+           .stroke();
+        doc.fontSize(10)
+           .fillColor(colors.text)
+           .text('Total Spent', startX + 10, cardY + 8);
+        doc.fontSize(16)
+           .fillColor(colors.danger)
+           .text(`₹${totalSpent.toLocaleString()}`, startX + 10, cardY + 28);
+        
+        // Card 2: Remaining
+        const card2X = startX + cardWidth + cardSpacing;
+        doc.rect(card2X, cardY, cardWidth, cardHeight)
+           .fillColor('#f0fdf4')
+           .fill();
+        doc.rect(card2X, cardY, cardWidth, cardHeight)
+           .strokeColor(colors.success)
+           .stroke();
+        doc.fontSize(10)
+           .fillColor(colors.text)
+           .text('Remaining', card2X + 10, cardY + 8);
+        doc.fontSize(16)
+           .fillColor(colors.success)
+           .text(`₹${remaining.toLocaleString()}`, card2X + 10, cardY + 28);
+        
+        // Card 3: Budget Used
+        const card3X = card2X + cardWidth + cardSpacing;
+        doc.rect(card3X, cardY, cardWidth, cardHeight)
+           .fillColor('#fefce8')
+           .fill();
+        doc.rect(card3X, cardY, cardWidth, cardHeight)
+           .strokeColor(colors.warning)
+           .stroke();
+        doc.fontSize(10)
+           .fillColor(colors.text)
+           .text('Budget Used', card3X + 10, cardY + 8);
+        doc.fontSize(16)
+           .fillColor(colors.warning)
+           .text(`${pct}%`, card3X + 10, cardY + 28);
+        
+        doc.moveDown(3);
+        
+        // ============ PROGRESS BAR ============
+        const barWidth = 450;
+        const barHeight = 25;
         const barX = 50;
-        const barY = doc.y + 10;
+        const barY = doc.y + 5;
         
+        // Background
         doc.rect(barX, barY, barWidth, barHeight)
-           .fillColor('#e0e0e0')
+           .fillColor('#f3f4f6')
+           .fill();
+        doc.rect(barX, barY, barWidth, barHeight)
+           .strokeColor(colors.border)
+           .stroke();
+        
+        // Fill
+        const fillWidth = Math.min((pct / 100) * barWidth, barWidth);
+        const fillColor = pct > 80 ? colors.danger : pct > 60 ? colors.warning : colors.success;
+        doc.rect(barX, barY, fillWidth, barHeight)
+           .fillColor(fillColor)
            .fill();
         
-        doc.rect(barX, barY, (pct / 100) * barWidth, barHeight)
-           .fillColor(pct > 80 ? '#EF4444' : pct > 60 ? '#F5A623' : '#22C55E')
-           .fill();
+        // Percentage text
+        doc.fontSize(12)
+           .fillColor('#ffffff')
+           .text(`${pct}%`, barX + (barWidth/2) - 20, barY + 5);
         
-        doc.fillColor('#333')
-           .fontSize(10)
-           .text(`${pct}%`, barX + barWidth/2 - 15, barY + 3);
+        doc.moveDown(2.5);
         
-        doc.moveDown(2);
-        
-        // Category Breakdown
+        // ============ CATEGORY BREAKDOWN ============
         doc.fontSize(14)
-           .fillColor('#555')
-           .text('Category Breakdown', { underline: true });
+           .fillColor(colors.primary)
+           .text('📊 Category Breakdown', { underline: true });
+        doc.moveDown(0.3);
         
-        const categories = {
-            food: '🍽️ Food',
-            hotel: '🏨 Hotel',
-            transport: '🚗 Transport',
-            shopping: '🛍️ Shopping',
-            entertainment: '🎮 Entertainment',
-            medical: '💊 Medical',
-            flight: '✈️ Flight',
-            others: '📦 Others'
+        const catColors = {
+            food: '#F97316',
+            hotel: '#8B5CF6',
+            transport: '#06B6D4',
+            shopping: '#EC4899',
+            entertainment: '#22C55E',
+            medical: '#EF4444',
+            flight: '#3B82F6',
+            others: '#6B7280'
+        };
+        
+        const catNames = {
+            food: 'Food',
+            hotel: 'Hotel',
+            transport: 'Transport',
+            shopping: 'Shopping',
+            entertainment: 'Entertainment',
+            medical: 'Medical',
+            flight: 'Flight',
+            others: 'Others'
         };
         
         const sortedCategories = Object.entries(categoryTotals)
             .sort((a, b) => b[1] - a[1]);
         
+        let catY = doc.y;
         sortedCategories.forEach(([cat, amount]) => {
-            const label = categories[cat] || cat;
+            const label = catNames[cat] || cat;
             const catPct = Math.round((amount / totalSpent) * 100);
-            doc.fontSize(12)
-               .fillColor('#333')
-               .text(`${label}: ₹${amount.toLocaleString()} (${catPct}%)`);
+            
+            // Category name and amount
+            doc.fontSize(11)
+               .fillColor(colors.text)
+               .text(`${label}:`, 50, catY);
+            doc.fontSize(11)
+               .fillColor(colors.secondary)
+               .text(`₹${amount.toLocaleString()} (${catPct}%)`, 150, catY);
+            
+            // Mini progress bar
+            const miniBarX = 250;
+            const miniBarY = catY + 3;
+            const miniBarWidth = 280;
+            const miniBarHeight = 12;
+            
+            doc.rect(miniBarX, miniBarY, miniBarWidth, miniBarHeight)
+               .fillColor('#f3f4f6')
+               .fill();
+            doc.rect(miniBarX, miniBarY, (catPct / 100) * miniBarWidth, miniBarHeight)
+               .fillColor(catColors[cat] || '#6B7280')
+               .fill();
+            
+            catY += 22;
         });
         
         doc.moveDown();
         
-        // Recent Expenses
+        // ============ RECENT EXPENSES ============
         if (expenses.length > 0) {
             doc.fontSize(14)
-               .fillColor('#555')
-               .text('Recent Expenses', { underline: true });
+               .fillColor(colors.primary)
+               .text('📝 Recent Expenses', { underline: true });
+            doc.moveDown(0.3);
             
+            // Table header
+            const tableY = doc.y;
+            doc.fontSize(10)
+               .fillColor(colors.light)
+               .text('Date', 50, tableY)
+               .text('Description', 120, tableY)
+               .text('Category', 350, tableY)
+               .text('Amount', 450, tableY);
+            
+            doc.moveTo(50, tableY + 15)
+               .lineTo(550, tableY + 15)
+               .strokeColor(colors.border)
+               .stroke();
+            
+            let rowY = tableY + 25;
             const recentExpenses = expenses.slice(-10).reverse();
-            recentExpenses.forEach(e => {
-                const catLabel = categories[e.category] || e.category;
-                doc.fontSize(11)
-                   .fillColor('#333')
-                   .text(`• ${e.description} | ${catLabel} | ₹${e.amount.toLocaleString()} | ${new Date(e.date).toLocaleDateString()}`);
+            recentExpenses.forEach((e, index) => {
+                if (rowY > 700) {
+                    doc.addPage();
+                    rowY = 50;
+                }
+                
+                const catLabel = catNames[e.category] || e.category;
+                const bgColor = index % 2 === 0 ? '#f9fafb' : '#ffffff';
+                
+                doc.rect(50, rowY - 3, 500, 18)
+                   .fillColor(bgColor)
+                   .fill();
+                
+                doc.fontSize(9)
+                   .fillColor(colors.text)
+                   .text(new Date(e.date).toLocaleDateString(), 50, rowY)
+                   .text(e.description.substring(0, 30), 120, rowY)
+                   .text(catLabel, 350, rowY)
+                   .text(`₹${e.amount.toLocaleString()}`, 450, rowY);
+                
+                rowY += 20;
             });
             
             if (expenses.length > 10) {
-                doc.fontSize(10)
-                   .fillColor('#999')
-                   .text(`... and ${expenses.length - 10} more expenses`);
+                doc.fontSize(9)
+                   .fillColor(colors.light)
+                   .text(`... and ${expenses.length - 10} more expenses`, 50, rowY + 5);
             }
         }
         
-        doc.moveDown();
-        
-        // Footer
-        doc.fontSize(10)
-           .fillColor('#999')
-           .text(`Generated on ${new Date().toLocaleString()}`, { align: 'center' });
+        // ============ FOOTER ============
+        doc.moveDown(2);
+        doc.fontSize(9)
+           .fillColor(colors.light)
+           .text(`Generated on ${new Date().toLocaleString()} | TravelOS`, { align: 'center' });
         
         doc.end();
         
@@ -591,7 +734,6 @@ app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
 // Generate Expenses List PDF
 app.get('/api/trips/:tripId/expenses-pdf', auth, async (req, res) => {
     try {
