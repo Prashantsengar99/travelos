@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
 const path = require('path');
+const PDFDocument = require('pdfkit'); // ✅ SIRF EK BAAR
 
 dotenv.config();
 
@@ -35,7 +36,7 @@ mongoose.connect(MONGODB_URI, {
     console.error('❌ MongoDB Connection Error:', err.message);
 });
 
-// ============ SCHEMAS (MODELS) - FIXED ============
+// ============ SCHEMAS (MODELS) ============
 
 // User Schema
 const UserSchema = new mongoose.Schema({
@@ -69,7 +70,7 @@ const ExpenseSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-// ✅ FIX: Models ko sahi se register karo (avoid overwriting)
+// Models
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 const Trip = mongoose.models.Trip || mongoose.model('Trip', TripSchema);
 const Expense = mongoose.models.Expense || mongoose.model('Expense', ExpenseSchema);
@@ -436,300 +437,8 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// ============ STATIC FILES SERVE ============
-app.use(express.static(path.join(__dirname)));
-
-// SPA fallback - sab se neeche
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// ============ START SERVER ============
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-    console.log('='.repeat(50));
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-    console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}`);
-    console.log(`📊 Database: ${mongoose.connection.db?.databaseName || 'N/A'}`);
-    console.log(`🔐 JWT: ${process.env.JWT_SECRET ? '✅ Configured' : '❌ Not configured'}`);
-    console.log(`📦 Models: User, Trip, Expense`);
-    console.log('='.repeat(50));
-});
 // ============ PDF GENERATION ============
-const PDFDocument = require('pdfkit');
-const fs = require('fs');
-
-// Generate Trip Summary PDF
-app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
-    try {
-        const tripId = req.params.tripId;
-        
-        // Fetch trip data
-        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
-        if (!trip) {
-            return res.status(404).json({ error: 'Trip not found' });
-        }
-        
-        // Fetch expenses
-        const expenses = await Expense.find({ tripId: tripId, userId: req.user._id });
-        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
-        const remaining = trip.budget - totalSpent;
-        const pct = Math.round((totalSpent / trip.budget) * 100);
-        
-        // Category breakdown
-        const categoryTotals = {};
-        expenses.forEach(e => {
-            categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
-        });
-        
-        // Create PDF
-        const doc = new PDFDocument({ margin: 50 });
-        const filename = `trip-summary-${trip.destination}-${Date.now()}.pdf`;
-        
-        // Set response headers
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-        
-        // Pipe PDF to response
-        doc.pipe(res);
-        
-        // ============ PDF CONTENT ============
-        
-        // Header
-        doc.fontSize(24)
-           .fillColor('#F5A623')
-           .text('TravelOS', { align: 'center' });
-        
-        doc.fontSize(18)
-           .fillColor('#333')
-           .text(`Trip Summary: ${trip.destination}`, { align: 'center' });
-        
-        doc.moveDown();
-        
-        // Trip Details
-        doc.fontSize(14)
-           .fillColor('#555')
-           .text('Trip Details', { underline: true });
-        
-        doc.fontSize(12)
-           .fillColor('#333')
-           .text(`📍 Destination: ${trip.destination}`)
-           .text(`📅 Dates: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`)
-           .text(`👥 Travellers: ${trip.travellers}`)
-           .text(`🏷️ Travel Type: ${trip.travelType}`)
-           .text(`💰 Total Budget: ₹${trip.budget.toLocaleString()}`);
-        
-        doc.moveDown();
-        
-        // Budget Summary
-        doc.fontSize(14)
-           .fillColor('#555')
-           .text('Budget Summary', { underline: true });
-        
-        doc.fontSize(12)
-           .fillColor('#333')
-           .text(`Total Spent: ₹${totalSpent.toLocaleString()}`)
-           .text(`Remaining: ₹${remaining.toLocaleString()}`)
-           .text(`Budget Used: ${pct}%`);
-        
-        // Progress bar (visual)
-        const barWidth = 400;
-        const barHeight = 20;
-        const barX = 50;
-        const barY = doc.y + 10;
-        
-        doc.rect(barX, barY, barWidth, barHeight)
-           .fillColor('#e0e0e0')
-           .fill();
-        
-        doc.rect(barX, barY, (pct / 100) * barWidth, barHeight)
-           .fillColor(pct > 80 ? '#EF4444' : pct > 60 ? '#F5A623' : '#22C55E')
-           .fill();
-        
-        doc.fillColor('#333')
-           .fontSize(10)
-           .text(`${pct}%`, barX + barWidth/2 - 15, barY + 3);
-        
-        doc.moveDown(2);
-        
-        // Category Breakdown
-        doc.fontSize(14)
-           .fillColor('#555')
-           .text('Category Breakdown', { underline: true });
-        
-        const categories = {
-            food: '🍽️ Food',
-            hotel: '🏨 Hotel',
-            transport: '🚗 Transport',
-            shopping: '🛍️ Shopping',
-            entertainment: '🎮 Entertainment',
-            medical: '💊 Medical',
-            flight: '✈️ Flight',
-            others: '📦 Others'
-        };
-        
-        const sortedCategories = Object.entries(categoryTotals)
-            .sort((a, b) => b[1] - a[1]);
-        
-        sortedCategories.forEach(([cat, amount]) => {
-            const label = categories[cat] || cat;
-            const catPct = Math.round((amount / totalSpent) * 100);
-            doc.fontSize(12)
-               .fillColor('#333')
-               .text(`${label}: ₹${amount.toLocaleString()} (${catPct}%)`);
-        });
-        
-        doc.moveDown();
-        
-        // Recent Expenses
-        if (expenses.length > 0) {
-            doc.fontSize(14)
-               .fillColor('#555')
-               .text('Recent Expenses', { underline: true });
-            
-            const recentExpenses = expenses.slice(-10).reverse();
-            recentExpenses.forEach(e => {
-                const catLabel = categories[e.category] || e.category;
-                doc.fontSize(11)
-                   .fillColor('#333')
-                   .text(`• ${e.description} | ${catLabel} | ₹${e.amount.toLocaleString()} | ${new Date(e.date).toLocaleDateString()}`);
-            });
-            
-            if (expenses.length > 10) {
-                doc.fontSize(10)
-                   .fillColor('#999')
-                   .text(`... and ${expenses.length - 10} more expenses`);
-            }
-        }
-        
-        doc.moveDown();
-        
-        // Footer
-        doc.fontSize(10)
-           .fillColor('#999')
-           .text(`Generated on ${new Date().toLocaleString()}`, { align: 'center' });
-        
-        // Finalize PDF
-        doc.end();
-        
-        console.log(`✅ PDF generated: ${filename}`);
-        
-    } catch (err) {
-        console.error('PDF Generation Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Generate Expenses List PDF
-app.get('/api/trips/:tripId/expenses-pdf', auth, async (req, res) => {
-    try {
-        const tripId = req.params.tripId;
-        
-        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
-        if (!trip) {
-            return res.status(404).json({ error: 'Trip not found' });
-        }
-        
-        const expenses = await Expense.find({ tripId: tripId, userId: req.user._id })
-            .sort({ date: -1 });
-        
-        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
-        
-        const doc = new PDFDocument({ margin: 50 });
-        const filename = `expenses-${trip.destination}-${Date.now()}.pdf`;
-        
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
-        
-        doc.pipe(res);
-        
-        // Header
-        doc.fontSize(24)
-           .fillColor('#F5A623')
-           .text('TravelOS', { align: 'center' });
-        
-        doc.fontSize(16)
-           .fillColor('#333')
-           .text(`Expense Report: ${trip.destination}`, { align: 'center' });
-        
-        doc.fontSize(12)
-           .fillColor('#666')
-           .text(`Total Expenses: ${expenses.length} | Total Amount: ₹${totalSpent.toLocaleString()}`, { align: 'center' });
-        
-        doc.moveDown();
-        
-        // Table Header
-        const tableTop = doc.y;
-        const col1 = 50;
-        const col2 = 180;
-        const col3 = 300;
-        const col4 = 400;
-        const col5 = 480;
-        
-        doc.fontSize(11)
-           .fillColor('#F5A623')
-           .text('Date', col1, tableTop)
-           .text('Description', col2, tableTop)
-           .text('Category', col3, tableTop)
-           .text('Amount', col4, tableTop);
-        
-        doc.moveTo(50, tableTop + 20)
-           .lineTo(550, tableTop + 20)
-           .strokeColor('#ccc')
-           .stroke();
-        
-        let y = tableTop + 30;
-        const categories = {
-            food: 'Food', hotel: 'Hotel', transport: 'Transport',
-            shopping: 'Shopping', entertainment: 'Entertainment',
-            medical: 'Medical', flight: 'Flight', others: 'Others'
-        };
-        
-        expenses.forEach((e, index) => {
-            if (y > 700) {
-                doc.addPage();
-                y = 50;
-            }
-            
-            const catLabel = categories[e.category] || e.category;
-            doc.fontSize(10)
-               .fillColor('#333')
-               .text(new Date(e.date).toLocaleDateString(), col1, y)
-               .text(e.description.substring(0, 25), col2, y)
-               .text(catLabel, col3, y)
-               .text(`₹${e.amount.toLocaleString()}`, col4, y);
-            
-            y += 20;
-            
-            // Alternate row colors
-            if (index % 2 === 0) {
-                doc.rect(50, y - 20, 500, 20)
-                   .fillColor('#f9f9f9')
-                   .fill();
-            }
-        });
-        
-        // Total Row
-        if (expenses.length > 0) {
-            y += 10;
-            doc.fontSize(11)
-               .fillColor('#F5A623')
-               .text('TOTAL', col2, y)
-               .text(`₹${totalSpent.toLocaleString()}`, col4, y);
-        }
-        
-        doc.end();
-        
-        console.log(`✅ Expenses PDF generated: ${filename}`);
-        
-    } catch (err) {
-        console.error('PDF Generation Error:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// ============ PDF GENERATION ============
-const PDFDocument = require('pdfkit');
+// ✅ PDFDocument already declared at top
 
 // Generate Trip Summary PDF
 app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
@@ -927,7 +636,6 @@ app.get('/api/trips/:tripId/expenses-pdf', auth, async (req, res) => {
         const col2 = 180;
         const col3 = 300;
         const col4 = 400;
-        const col5 = 480;
         
         doc.fontSize(11)
            .fillColor('#F5A623')
@@ -988,4 +696,24 @@ app.get('/api/trips/:tripId/expenses-pdf', auth, async (req, res) => {
         console.error('PDF Generation Error:', err);
         res.status(500).json({ error: err.message });
     }
+});
+
+// ============ STATIC FILES SERVE ============
+app.use(express.static(path.join(__dirname)));
+
+// SPA fallback - sab se neeche
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ============ START SERVER ============
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => {
+    console.log('='.repeat(50));
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}`);
+    console.log(`📊 Database: ${mongoose.connection.db?.databaseName || 'N/A'}`);
+    console.log(`🔐 JWT: ${process.env.JWT_SECRET ? '✅ Configured' : '❌ Not configured'}`);
+    console.log(`📦 Models: User, Trip, Expense`);
+    console.log('='.repeat(50));
 });
