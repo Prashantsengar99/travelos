@@ -27,9 +27,9 @@ console.log('📍 Hostname:', window.location.hostname);
 console.log('🔑 Token exists:', !!authToken);
 
 // ============================================================
-// API HELPER
+// API HELPER WITH RETRY
 // ============================================================
-async function apiCall(endpoint, options = {}) {
+async function apiCall(endpoint, options = {}, retries = 3) {
     const token = localStorage.getItem('travelos_token');
     
     const headers = {
@@ -42,6 +42,7 @@ async function apiCall(endpoint, options = {}) {
     }
     
     try {
+        console.log(`📤 API Call: ${API_URL}${endpoint} (Attempt ${4 - retries})`);
         const response = await fetch(`${API_URL}${endpoint}`, {
             ...options,
             headers
@@ -60,9 +61,11 @@ async function apiCall(endpoint, options = {}) {
         }
         return response.json();
     } catch (err) {
-        console.error('❌ API Error:', err);
-        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
-            throw new Error('Cannot connect to server. Please check your internet connection.');
+        // ✅ Retry logic for network errors (backend sleeping)
+        if (retries > 0 && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
+            console.log(`⏳ Retrying... (${retries} attempts left)`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            return apiCall(endpoint, options, retries - 1);
         }
         throw err;
     }

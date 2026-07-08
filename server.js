@@ -13,10 +13,11 @@ const app = express();
 
 // ============ CORS ============
 app.use(cors({
-    origin: '*',
-    credentials: true
+    origin: '*',  // ✅ Sabhi origins allow
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
 
 // ============ MONGODB CONNECTION ============
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://thakurprashant9720_db_user:b3ykaKUV3EhYEux5@cluster0.9dsenb3.mongodb.net/travelos?retryWrites=true&w=majority&appName=Cluster0';
