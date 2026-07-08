@@ -11,10 +11,10 @@ dotenv.config();
 
 const app = express();
 
-// ============ MIDDLEWARE - ORDER MATTERS! ============
-// ✅ Body parser - JSON data ke liye (Login/Register ke liye important)
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// ============ MIDDLEWARE - CRITICAL ORDER ============
+// ✅ Body parser - SAB SE PEHLE (Render pe kaam karne ke liye)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // ============ CORS ============
 app.use(cors({
@@ -31,6 +31,15 @@ app.options('*', (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.sendStatus(200);
+});
+
+// ✅ Debug logging middleware
+app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.path}`);
+    if (req.method === 'POST' || req.method === 'PUT') {
+        console.log('📦 Body:', req.body);
+    }
+    next();
 });
 
 // ============ MONGODB CONNECTION ============
@@ -90,7 +99,7 @@ console.log('✅ Models registered: User, Trip, Expense');
 // ============ AUTH ============
 app.post('/api/auth/register', async (req, res) => {
     try {
-        console.log('📝 Register request body:', req.body); // ✅ Debug log
+        console.log('📝 Register request body:', req.body);
         
         const { name, email, password } = req.body;
         
@@ -130,7 +139,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 app.post('/api/auth/login', async (req, res) => {
     try {
-        console.log('📝 Login request body:', req.body); // ✅ Debug log
+        console.log('📝 Login request body:', req.body);
         
         const { email, password } = req.body;
         
@@ -446,13 +455,144 @@ app.get('/api/health', (req, res) => {
 
 // ============ PDF GENERATION ============
 app.get('/api/trips/:tripId/pdf', auth, async (req, res) => {
-    // ... PDF code (same as before) ...
-    res.json({ message: 'PDF generated' });
+    try {
+        const tripId = req.params.tripId;
+        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
+        if (!trip) return res.status(404).json({ error: 'Trip not found' });
+        
+        const expenses = await Expense.find({ tripId: tripId, userId: req.user._id });
+        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+        const remaining = trip.budget - totalSpent;
+        const pct = Math.round((totalSpent / trip.budget) * 100);
+        
+        const categoryTotals = {};
+        expenses.forEach(e => {
+            categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+        });
+        
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const filename = `trip-summary-${trip.destination}-${Date.now()}.pdf`;
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        doc.pipe(res);
+        
+        // Header
+        doc.fontSize(24).fillColor('#F5A623').text('TravelOS', { align: 'center' });
+        doc.fontSize(18).fillColor('#333').text(`Trip Summary: ${trip.destination}`, { align: 'center' });
+        doc.moveDown();
+        
+        // Trip Details
+        doc.fontSize(14).fillColor('#555').text('Trip Details', { underline: true });
+        doc.fontSize(11).fillColor('#333')
+           .text(`Destination: ${trip.destination}`)
+           .text(`Dates: ${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`)
+           .text(`Travellers: ${trip.travellers}`)
+           .text(`Travel Type: ${trip.travelType}`)
+           .text(`Total Budget: ₹${trip.budget.toLocaleString()}`);
+        doc.moveDown();
+        
+        // Budget Summary
+        doc.fontSize(14).fillColor('#555').text('Budget Summary', { underline: true });
+        doc.fontSize(11).fillColor('#333')
+           .text(`Total Spent: ₹${totalSpent.toLocaleString()}`)
+           .text(`Remaining: ₹${remaining.toLocaleString()}`)
+           .text(`Budget Used: ${pct}%`);
+        
+        // Category Breakdown
+        doc.moveDown();
+        doc.fontSize(14).fillColor('#555').text('Category Breakdown', { underline: true });
+        
+        const catNames = {
+            food: 'Food', hotel: 'Hotel', transport: 'Transport',
+            shopping: 'Shopping', entertainment: 'Entertainment',
+            medical: 'Medical', flight: 'Flight', others: 'Others'
+        };
+        
+        const sortedCategories = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1]);
+        sortedCategories.forEach(([cat, amount]) => {
+            const label = catNames[cat] || cat;
+            const catPct = Math.round((amount / totalSpent) * 100);
+            doc.fontSize(11).fillColor('#333')
+               .text(`${label}: ₹${amount.toLocaleString()} (${catPct}%)`);
+        });
+        
+        doc.moveDown();
+        
+        // Recent Expenses
+        if (expenses.length > 0) {
+            doc.fontSize(14).fillColor('#555').text('Recent Expenses', { underline: true });
+            const recentExpenses = expenses.slice(-10).reverse();
+            recentExpenses.forEach(e => {
+                const catLabel = catNames[e.category] || e.category;
+                doc.fontSize(10).fillColor('#333')
+                   .text(`• ${e.description} | ${catLabel} | ₹${e.amount.toLocaleString()} | ${new Date(e.date).toLocaleDateString()}`);
+            });
+        }
+        
+        doc.end();
+        console.log(`✅ PDF generated: ${filename}`);
+    } catch (err) {
+        console.error('PDF Generation Error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.get('/api/trips/:tripId/expenses-pdf', auth, async (req, res) => {
-    // ... PDF code (same as before) ...
-    res.json({ message: 'PDF generated' });
+    try {
+        const tripId = req.params.tripId;
+        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
+        if (!trip) return res.status(404).json({ error: 'Trip not found' });
+        
+        const expenses = await Expense.find({ tripId: tripId, userId: req.user._id }).sort({ date: -1 });
+        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+        
+        const doc = new PDFDocument({ margin: 50 });
+        const filename = `expenses-${trip.destination}-${Date.now()}.pdf`;
+        
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        doc.pipe(res);
+        
+        doc.fontSize(24).fillColor('#F5A623').text('TravelOS', { align: 'center' });
+        doc.fontSize(16).fillColor('#333').text(`Expense Report: ${trip.destination}`, { align: 'center' });
+        doc.fontSize(12).fillColor('#666').text(`Total Expenses: ${expenses.length} | Total Amount: ₹${totalSpent.toLocaleString()}`, { align: 'center' });
+        doc.moveDown();
+        
+        let y = doc.y + 20;
+        const categories = {
+            food: 'Food', hotel: 'Hotel', transport: 'Transport',
+            shopping: 'Shopping', entertainment: 'Entertainment',
+            medical: 'Medical', flight: 'Flight', others: 'Others'
+        };
+        
+        doc.fontSize(10).fillColor('#555');
+        doc.text('Date', 50, y - 10);
+        doc.text('Description', 150, y - 10);
+        doc.text('Category', 320, y - 10);
+        doc.text('Amount', 450, y - 10);
+        
+        y += 10;
+        doc.moveTo(50, y).lineTo(550, y).strokeColor('#ccc').stroke();
+        y += 15;
+        
+        expenses.forEach((e) => {
+            if (y > 700) { doc.addPage(); y = 50; }
+            const catLabel = categories[e.category] || e.category;
+            doc.fillColor('#333')
+               .text(new Date(e.date).toLocaleDateString(), 50, y)
+               .text(e.description.substring(0, 25), 150, y)
+               .text(catLabel, 320, y)
+               .text(`₹${e.amount.toLocaleString()}`, 450, y);
+            y += 20;
+        });
+        
+        doc.end();
+        console.log(`✅ Expenses PDF generated: ${filename}`);
+    } catch (err) {
+        console.error('PDF Generation Error:', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ============ EMAIL NOTIFICATIONS (DISABLED) ============
