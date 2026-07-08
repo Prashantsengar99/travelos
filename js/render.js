@@ -37,6 +37,12 @@ function renderDashboard() {
             <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
+                <i class="fas fa-envelope"></i> Alert
+            </button>
+            <button onclick="sendTripSummaryEmail()" class="btn btn-sm btn-ghost" title="Send Trip Summary Email">
+                <i class="fas fa-file-export"></i> Summary
+            </button>
             <button onclick="downloadTripPDF()" class="btn btn-sm btn-ghost" title="Download Trip Summary PDF">
                 <i class="fas fa-file-pdf"></i> PDF
             </button>
@@ -186,6 +192,7 @@ function renderDashboard() {
 
     if (pct >= 75) document.getElementById('notifDot').style.display = 'block';
 }
+
 // ============================================================
 // TRIP DETAILS WITH PDF BUTTON
 // ============================================================
@@ -326,8 +333,96 @@ async function downloadExpensesPDF() {
     }
 }
 
+// ============================================================
+// EMAIL FUNCTIONS
+// ============================================================
+
+async function sendBudgetAlertEmail() {
+    const t = getTrip();
+    if (!t) {
+        toast('No active trip!', 'warning');
+        return;
+    }
+    
+    const token = authAPI.getToken();
+    const user = state.user;
+    const spent = totalSpent();
+    const pct = Math.round((spent / t.budget) * 100);
+    
+    try {
+        toast('Sending email...', 'info');
+        
+        const response = await fetch(`${API_URL}/email/budget-alert`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                tripId: t._id || t.id,
+                userEmail: user.email,
+                userName: user.name,
+                tripDestination: t.destination,
+                spent: spent,
+                budget: t.budget,
+                pct: pct
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to send email');
+        }
+        
+        toast('📧 Budget alert email sent successfully!', 'success');
+        
+    } catch (err) {
+        console.error('Email Error:', err);
+        toast('Failed to send email: ' + err.message, 'danger');
+    }
+}
+
+async function sendTripSummaryEmail() {
+    const t = getTrip();
+    if (!t) {
+        toast('No active trip!', 'warning');
+        return;
+    }
+    
+    const token = authAPI.getToken();
+    const user = state.user;
+    
+    try {
+        toast('Sending email...', 'info');
+        
+        const response = await fetch(`${API_URL}/email/trip-summary`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                userEmail: user.email,
+                userName: user.name,
+                trip: t
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to send email');
+        }
+        
+        toast('📊 Trip summary email sent successfully!', 'success');
+        
+    } catch (err) {
+        console.error('Email Error:', err);
+        toast('Failed to send email: ' + err.message, 'danger');
+    }
+}
+
 // ✅ Make globally available for onclick
 window.downloadTripPDF = downloadTripPDF;
 window.downloadExpensesPDF = downloadExpensesPDF;
+window.sendBudgetAlertEmail = sendBudgetAlertEmail;
+window.sendTripSummaryEmail = sendTripSummaryEmail;
 
-console.log('✅ PDF Functions Loaded!');
+console.log('✅ PDF & Email Functions Loaded!');

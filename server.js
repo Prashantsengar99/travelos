@@ -859,3 +859,269 @@ app.listen(PORT, () => {
     console.log(`📦 Models: User, Trip, Expense`);
     console.log('='.repeat(50));
 });
+
+// ============ EMAIL NOTIFICATIONS ============
+const nodemailer = require('nodemailer');
+
+// Email transporter configuration with better error handling
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    },
+    debug: true, // Debug mode on
+    logger: true // Logging on
+});
+
+// Verify transporter connection
+transporter.verify((error, success) => {
+    if (error) {
+        console.error('❌ Email transporter error:', error);
+    } else {
+        console.log('✅ Email transporter ready to send messages');
+    }
+});
+
+// Send budget alert email
+app.post('/api/email/budget-alert', auth, async (req, res) => {
+    try {
+        const { tripId, userEmail, userName, tripDestination, spent, budget, pct } = req.body;
+        
+        console.log('📧 Sending budget alert email to:', userEmail);
+        
+        const remaining = budget - spent;
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: userEmail,
+            subject: `⚠️ Budget Alert: ${tripDestination} Trip`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #F5A623, #FF6B35); border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #fff; margin: 0;">🚨 Budget Alert</h1>
+                    </div>
+                    <div style="padding: 20px; background: #fff; border-radius: 0 0 10px 10px;">
+                        <h2 style="color: #333;">Hello ${userName},</h2>
+                        <p style="color: #555; font-size: 16px;">Your <strong>${tripDestination}</strong> trip budget is at <strong style="color: ${pct > 80 ? '#EF4444' : '#F97316'};">${pct}%</strong> usage!</p>
+                        
+                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                            <p style="margin: 5px 0;"><strong>Total Budget:</strong> ₹${budget.toLocaleString()}</p>
+                            <p style="margin: 5px 0;"><strong>Total Spent:</strong> ₹${spent.toLocaleString()}</p>
+                            <p style="margin: 5px 0;"><strong>Remaining:</strong> ₹${remaining.toLocaleString()}</p>
+                            <p style="margin: 5px 0;"><strong>Budget Used:</strong> ${pct}%</p>
+                        </div>
+                        
+                        <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                            <p style="margin: 0; color: #92400e;">
+                                💡 <strong>Tip:</strong> ${pct > 80 ? 'You need to control your spending! Consider cutting non-essential expenses.' : 'Keep an eye on your spending to stay within budget.'}
+                            </p>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="https://travelos-neon.vercel.app/" style="background: #F5A623; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                                View Your Trip
+                            </a>
+                        </div>
+                        
+                        <p style="color: #888; font-size: 12px; text-align: center; margin-top: 20px;">
+                            This email was sent automatically from TravelOS.
+                        </p>
+                    </div>
+                </div>
+            `
+        };
+        
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Budget alert email sent to ${userEmail}`);
+        console.log('📧 Message ID:', info.messageId);
+        res.json({ message: 'Email sent successfully', messageId: info.messageId });
+        
+    } catch (err) {
+        console.error('❌ Email Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Send trip summary email
+app.post('/api/email/trip-summary', auth, async (req, res) => {
+    try {
+        const { userEmail, userName, trip } = req.body;
+        const expenses = await Expense.find({ tripId: trip._id, userId: req.user._id });
+        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+        const remaining = trip.budget - totalSpent;
+        const pct = Math.round((totalSpent / trip.budget) * 100);
+        
+        console.log('📧 Sending trip summary email to:', userEmail);
+        
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: userEmail,
+            subject: `📊 Trip Summary: ${trip.destination}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                    <div style="text-align: center; padding: 20px; background: linear-gradient(135deg, #F5A623, #FF6B35); border-radius: 10px 10px 0 0;">
+                        <h1 style="color: #fff; margin: 0;">📊 Trip Summary</h1>
+                    </div>
+                    <div style="padding: 20px; background: #fff; border-radius: 0 0 10px 10px;">
+                        <h2 style="color: #333;">${trip.destination}</h2>
+                        <p style="color: #666; font-size: 14px;">${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}</p>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 20px 0;">
+                            <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 12px; color: #666;">Budget</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #22C55E;">₹${trip.budget.toLocaleString()}</div>
+                            </div>
+                            <div style="background: #fef2f2; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 12px; color: #666;">Spent</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #EF4444;">₹${totalSpent.toLocaleString()}</div>
+                            </div>
+                            <div style="background: #fefce8; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 12px; color: #666;">Remaining</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #F97316;">₹${remaining.toLocaleString()}</div>
+                            </div>
+                            <div style="background: #eff6ff; padding: 15px; border-radius: 8px; text-align: center;">
+                                <div style="font-size: 12px; color: #666;">Used</div>
+                                <div style="font-size: 20px; font-weight: bold; color: #3B82F6;">${pct}%</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                            <p style="margin: 0;"><strong>Total Expenses:</strong> ${expenses.length}</p>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 20px 0;">
+                            <a href="https://travelos-neon.vercel.app/" style="background: #F5A623; color: #fff; padding: 12px 30px; text-decoration: none; border-radius: 5px; display: inline-block;">
+                                View Full Report
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+        
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Trip summary email sent to ${userEmail}`);
+        console.log('📧 Message ID:', info.messageId);
+        res.json({ message: 'Email sent successfully', messageId: info.messageId });
+        
+    } catch (err) {
+        console.error('❌ Email Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+        
+
+
+// ============ SOCIAL LOGIN ============
+const passport = require('passport');
+const session = require('express-session');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const FacebookStrategy = require('passport-facebook').Strategy;
+
+// Session setup
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'travelos_session_secret',
+    resave: false,
+    saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Serialize/Deserialize user
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await User.findById(id);
+        done(null, user);
+    } catch (err) {
+        done(err, null);
+    }
+});
+
+// Google Strategy
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: 'https://travelos-mkpn.onrender.com/api/auth/google/callback'
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        let user = await User.findOne({ email: profile.emails[0].value });
+        if (!user) {
+            // Create new user
+            user = new User({
+                name: profile.displayName,
+                email: profile.emails[0].value,
+                password: 'google_' + Math.random().toString(36).slice(2, 10),
+                isGoogleUser: true
+            });
+            await user.save();
+        }
+        done(null, user);
+    } catch (err) {
+        done(err, null);
+    }
+}));
+
+// Facebook Strategy
+passport.use(new FacebookStrategy({
+    clientID: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackURL: 'https://travelos-mkpn.onrender.com/api/auth/facebook/callback',
+    profileFields: ['id', 'displayName', 'emails']
+}, async (accessToken, refreshToken, profile, done) => {
+    try {
+        const email = profile.emails ? profile.emails[0].value : profile.id + '@facebook.com';
+        let user = await User.findOne({ email: email });
+        if (!user) {
+            user = new User({
+                name: profile.displayName,
+                email: email,
+                password: 'facebook_' + Math.random().toString(36).slice(2, 10),
+                isFacebookUser: true
+            });
+            await user.save();
+        }
+        done(null, user);
+    } catch (err) {
+        done(err, null);
+    }
+}));
+
+// Google Auth Routes
+app.get('/api/auth/google',
+    passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+app.get('/api/auth/google/callback',
+    passport.authenticate('google', { failureRedirect: '/login' }),
+    (req, res) => {
+        // Generate JWT token
+        const token = jwt.sign(
+            { id: req.user._id },
+            process.env.JWT_SECRET || 'travelos_secret_key',
+            { expiresIn: '7d' }
+        );
+        res.redirect(`https://travelos-neon.vercel.app/auth-callback?token=${token}&name=${req.user.name}`);
+    }
+);
+
+// Facebook Auth Routes
+app.get('/api/auth/facebook',
+    passport.authenticate('facebook', { scope: ['email'] })
+);
+
+app.get('/api/auth/facebook/callback',
+    passport.authenticate('facebook', { failureRedirect: '/login' }),
+    (req, res) => {
+        const token = jwt.sign(
+            { id: req.user._id },
+            process.env.JWT_SECRET || 'travelos_secret_key',
+            { expiresIn: '7d' }
+        );
+        res.redirect(`https://travelos-neon.vercel.app/auth-callback?token=${token}&name=${req.user.name}`);
+    }
+);
