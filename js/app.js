@@ -1,23 +1,20 @@
 // ============================================================
 // APP INIT
 // ============================================================
-// Check if app already initialized
 if (typeof window.appInitialized === 'undefined') {
     window.appInitialized = true;
 
     window.addEventListener('DOMContentLoaded', () => {
-        // Check if already logged in
-        const token = localStorage.getItem('travelos_token');
-        if (token) {
-            window.authToken = token;
-            // Load data and navigate
+        // ✅ Token check using authAPI
+        if (authAPI.isLoggedIn()) {
+            console.log('✅ User already logged in');
             loadState();
             updateUserUI();
             loadAllData().then(() => {
                 setTimeout(() => navigate('dashboard'), 100);
             });
         } else {
-            // Show login modal
+            console.log('🔑 No token found, showing login');
             loadState();
             if (state.trips.length === 0) seedData();
             updateUserUI();
