@@ -35,9 +35,9 @@ mongoose.connect(MONGODB_URI, {
     console.error('❌ MongoDB Connection Error:', err.message);
 });
 
-// ============ SCHEMAS (MODELS) ============
-// (UserSchema, TripSchema, ExpenseSchema - aapke code ke hisaab se rakhein)
+// ============ SCHEMAS (MODELS) - FIXED ============
 
+// User Schema
 const UserSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
@@ -45,6 +45,7 @@ const UserSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// Trip Schema
 const TripSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     destination: { type: String, required: true },
@@ -57,6 +58,7 @@ const TripSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// Expense Schema
 const ExpenseSchema = new mongoose.Schema({
     tripId: { type: mongoose.Schema.Types.ObjectId, ref: 'Trip', required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -67,9 +69,12 @@ const ExpenseSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
-const User = mongoose.model('User', UserSchema);
-const Trip = mongoose.model('Trip', TripSchema);
-const Expense = mongoose.model('Expense', ExpenseSchema);
+// ✅ FIX: Models ko sahi se register karo (avoid overwriting)
+const User = mongoose.models.User || mongoose.model('User', UserSchema);
+const Trip = mongoose.models.Trip || mongoose.model('Trip', TripSchema);
+const Expense = mongoose.models.Expense || mongoose.model('Expense', ExpenseSchema);
+
+console.log('✅ Models registered: User, Trip, Expense');
 
 // ============ AUTH ============
 app.post('/api/auth/register', async (req, res) => {
@@ -163,6 +168,7 @@ const auth = async (req, res, next) => {
         req.user = user;
         next();
     } catch (err) {
+        console.error('Auth error:', err.message);
         if (err.name === 'JsonWebTokenError') {
             return res.status(401).json({ error: 'Invalid token' });
         }
@@ -173,62 +179,84 @@ const auth = async (req, res, next) => {
     }
 };
 
-// ============ API ROUTES ============
-// (Aapke saare API routes yahan aayenge - trips, expenses, analytics, packing, weather, health)
-
+// ============ TRIPS ============
 app.get('/api/trips', auth, async (req, res) => {
     try {
+        console.log(`📊 Fetching trips for user: ${req.user._id}`);
         const trips = await Trip.find({ userId: req.user._id }).sort({ startDate: -1 });
-        console.log(`📊 Fetched ${trips.length} trips for user ${req.user.email}`);
+        console.log(`📊 Found ${trips.length} trips`);
         res.json(trips);
     } catch (err) {
+        console.error('Error fetching trips:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
 app.post('/api/trips', auth, async (req, res) => {
     try {
-        const trip = new Trip({ ...req.body, userId: req.user._id });
-        await trip.save();
-        console.log(`✅ Trip created: ${trip.destination} for ${req.user.email}`);
-        res.status(201).json(trip);
+        console.log('📝 Creating trip for user:', req.user._id);
+        console.log('📝 Trip data:', req.body);
+        
+        const trip = new Trip({ 
+            ...req.body, 
+            userId: req.user._id,
+            startDate: new Date(req.body.startDate),
+            endDate: new Date(req.body.endDate)
+        });
+        
+        const savedTrip = await trip.save();
+        console.log(`✅ Trip created: ${savedTrip.destination} (ID: ${savedTrip._id})`);
+        res.status(201).json(savedTrip);
     } catch (err) {
+        console.error('Error creating trip:', err);
         res.status(400).json({ error: err.message });
     }
 });
 
 app.delete('/api/trips/:id', auth, async (req, res) => {
     try {
+        console.log(`🗑️ Deleting trip: ${req.params.id}`);
         const trip = await Trip.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
-        if (!trip) return res.status(404).json({ error: 'Trip not found' });
+        if (!trip) {
+            return res.status(404).json({ error: 'Trip not found' });
+        }
         await Expense.deleteMany({ tripId: req.params.id });
-        console.log(`🗑️ Trip deleted: ${trip.destination}`);
+        console.log(`✅ Trip deleted: ${trip.destination}`);
         res.json({ message: 'Trip deleted successfully' });
     } catch (err) {
+        console.error('Error deleting trip:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
+// ============ EXPENSES ============
 app.get('/api/expenses', auth, async (req, res) => {
     try {
         const { tripId } = req.query;
         const filter = { userId: req.user._id };
         if (tripId) filter.tripId = tripId;
         const expenses = await Expense.find(filter).sort({ date: -1 });
-        console.log(`📊 Fetched ${expenses.length} expenses for trip ${tripId || 'all'}`);
+        console.log(`📊 Found ${expenses.length} expenses`);
         res.json(expenses);
     } catch (err) {
+        console.error('Error fetching expenses:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
 app.post('/api/expenses', auth, async (req, res) => {
     try {
-        const expense = new Expense({ ...req.body, userId: req.user._id });
-        await expense.save();
-        console.log(`✅ Expense added: ${expense.description} (${expense.amount})`);
-        res.status(201).json(expense);
+        console.log('📝 Creating expense:', req.body);
+        const expense = new Expense({ 
+            ...req.body, 
+            userId: req.user._id,
+            date: new Date(req.body.date)
+        });
+        const savedExpense = await expense.save();
+        console.log(`✅ Expense added: ${savedExpense.description} (${savedExpense.amount})`);
+        res.status(201).json(savedExpense);
     } catch (err) {
+        console.error('Error creating expense:', err);
         res.status(400).json({ error: err.message });
     }
 });
@@ -237,13 +265,14 @@ app.delete('/api/expenses/:id', auth, async (req, res) => {
     try {
         const expense = await Expense.findOneAndDelete({ _id: req.params.id, userId: req.user._id });
         if (!expense) return res.status(404).json({ error: 'Expense not found' });
-        console.log(`🗑️ Expense deleted: ${expense.description}`);
+        console.log(`✅ Expense deleted: ${expense.description}`);
         res.json({ message: 'Expense deleted successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
+// ============ EXPENSE SUMMARY ============
 app.get('/api/expenses/summary/:tripId', auth, async (req, res) => {
     try {
         const expenses = await Expense.find({ tripId: req.params.tripId, userId: req.user._id });
@@ -261,6 +290,7 @@ app.get('/api/expenses/summary/:tripId', auth, async (req, res) => {
     }
 });
 
+// ============ ANALYTICS ============
 app.get('/api/analytics/:tripId', auth, async (req, res) => {
     try {
         const trip = await Trip.findOne({ _id: req.params.tripId, userId: req.user._id });
@@ -295,6 +325,7 @@ app.get('/api/analytics/:tripId', auth, async (req, res) => {
     }
 });
 
+// ============ PACKING ============
 app.get('/api/packing/:tripId', auth, async (req, res) => {
     try {
         const defaultItems = [
@@ -323,6 +354,7 @@ app.put('/api/packing/:tripId', auth, async (req, res) => {
     }
 });
 
+// ============ WEATHER API ============
 app.get('/api/weather/:city', async (req, res) => {
     try {
         const city = req.params.city;
@@ -394,6 +426,7 @@ app.get('/api/weather/:city', async (req, res) => {
     }
 });
 
+// ============ HEALTH CHECK ============
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
@@ -403,19 +436,15 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// ============ STATIC FILES SERVE - SAB SE NECHE ============
-// ✅ Pehle saare API routes handle karo, phir static files
-
-// Serve static files from root directory
+// ============ STATIC FILES SERVE ============
 app.use(express.static(path.join(__dirname)));
 
-// Agar koi file nahi milti (404), toh index.html bhejo (SPA support)
+// SPA fallback - sab se neeche
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 // ============ START SERVER ============
-
 const PORT = process.env.PORT || 5001;
 app.listen(PORT, () => {
     console.log('='.repeat(50));
@@ -423,6 +452,6 @@ app.listen(PORT, () => {
     console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}`);
     console.log(`📊 Database: ${mongoose.connection.db?.databaseName || 'N/A'}`);
     console.log(`🔐 JWT: ${process.env.JWT_SECRET ? '✅ Configured' : '❌ Not configured'}`);
-    console.log(`🌐 Frontend: http://localhost:${PORT}`);
+    console.log(`📦 Models: User, Trip, Expense`);
     console.log('='.repeat(50));
 });
