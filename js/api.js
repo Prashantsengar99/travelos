@@ -2,17 +2,20 @@
 // API CONFIGURATION
 // ============================================================
 const getApiUrl = () => {
-    // Production - Render backend
-    if (window.location.hostname.includes('vercel.app') || 
-        window.location.hostname.includes('onrender.com')) {
+    // ✅ Production - Render backend (Vercel)
+    if (window.location.hostname.includes('vercel.app')) {
         return 'https://travelos-mkpn.onrender.com/api';
     }
-    // Development - Localhost
+    // ✅ Production - Render backend (direct)
+    if (window.location.hostname.includes('onrender.com')) {
+        return 'https://travelos-mkpn.onrender.com/api';
+    }
+    // ✅ Development - Localhost
     if (window.location.hostname === 'localhost' || 
         window.location.hostname === '127.0.0.1') {
         return localStorage.getItem('API_URL') || 'http://localhost:5001/api';
     }
-    // Fallback
+    // ✅ Fallback - Render
     return 'https://travelos-mkpn.onrender.com/api';
 };
 
@@ -21,6 +24,7 @@ let authToken = localStorage.getItem('travelos_token');
 
 console.log('🌐 API URL:', API_URL);
 console.log('📍 Hostname:', window.location.hostname);
+console.log('🔑 Token exists:', !!authToken);
 
 // ============================================================
 // API HELPER
@@ -56,6 +60,7 @@ async function apiCall(endpoint, options = {}) {
         }
         return response.json();
     } catch (err) {
+        console.error('❌ API Error:', err);
         if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
             throw new Error('Cannot connect to server. Please check your internet connection.');
         }
