@@ -259,11 +259,13 @@
     
 
     <script>
+     // ============================================================
+    // API CONFIGURATION - NOW HANDLED BY api.js
     // ============================================================
-    // API CONFIGURATION
-    // ============================================================
-    const API_URL = localStorage.getItem('API_URL') || 'http://localhost:5001/api';
-    let authToken = localStorage.getItem('travelos_token');
+    // ✅ Yeh sab code hatado, api.js handle karega
+    
+    // Bas yeh line rakho (agar kuch aur ho toh)
+    console.log('⏳ Waiting for api.js to load...');
 
     // ============================================================
     // API HELPER
@@ -1899,29 +1901,31 @@
     console.log('📦 Trips:', state.trips.length);
     console.log('💰 Expenses:', state.expenses.length);
     </script>
+<!-- ============================================================ -->
+<!-- JAVASCRIPT FILES (Order Matters!) -->
+<!-- ============================================================ -->
 
-    <!-- ============================================================ -->
-    <!-- JAVASCRIPT FILES (Order Matters!) -->
-    <!-- ============================================================ -->
-    
-    <!-- 1. State & Constants -->
-    <script src="js/state.js"></script>
-    
-    <!-- 2. Helper Functions -->
-    <script src="js/helpers.js"></script>
-    
-    <!-- 3. API Functions -->
-    <script src="js/api.js"></script>
-    
-    <!-- 4. Chatbot Logic -->
-    <script src="js/chat.js"></script>
-    
-    <!-- 5. Render Functions -->
-    <script src="js/render.js"></script>
-    
-    <!-- 6. Main App - Sab se akhir mein -->
-    <script src="js/app.js"></script>
-    
-    <!-- ============================================================ -->
+<!-- 1. State & Constants -->
+<script src="js/state.js"></script>
+
+<!-- 2. Helper Functions -->
+<script src="js/helpers.js"></script>
+
+<!-- 3. API Functions -->
+<script src="js/api.js"></script>
+
+<!-- 4. Chatbot Logic -->
+<script src="js/chat.js"></script>
+
+<!-- 5. Render Functions -->
+<script src="js/render.js"></script>
+
+<!-- 6. Split Calculator -->
+<script src="js/split-calculator.js"></script>
+
+<!-- 7. Main App - Sab se akhir mein -->
+<script src="js/app.js"></script>
+
+<!-- ============================================================ -->
 </body>
 </html>
