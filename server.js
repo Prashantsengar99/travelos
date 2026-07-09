@@ -77,7 +77,7 @@ const TripSchema = new mongoose.Schema({
     currency: { type: String, default: 'INR' },
     travellers: { type: Number, default: 1 },
     travelType: { type: String, enum: ['Solo', 'Friends', 'Family', 'Business'], default: 'Friends' },
-    shareCode: { type: String, unique: true, sparse: true }, // ✅ ADD THIS
+    shareCode: { type: String, unique: true, sparse: true },
     createdAt: { type: Date, default: Date.now }
 });
 
@@ -615,7 +615,87 @@ app.post('/api/email/trip-summary', auth, async (req, res) => {
     });
 });
 
-// ============ STATIC FILES SERVE ============
+// ============ TRIP SHARING ============
+
+// Generate shareable link
+app.get('/api/trips/:tripId/share', auth, async (req, res) => {
+    try {
+        console.log('📤 Generating share link for trip:', req.params.tripId);
+        
+        const tripId = req.params.tripId;
+        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
+        if (!trip) {
+            return res.status(404).json({ error: 'Trip not found' });
+        }
+
+        // Generate unique share code
+        const shareCode = Buffer.from(`${tripId}_${Date.now()}`).toString('base64').slice(0, 20);
+        
+        // Save share code to trip
+        trip.shareCode = shareCode;
+        await trip.save();
+
+        const shareUrl = `https://travelos-neon.vercel.app/shared-trip/${shareCode}`;
+        
+        console.log('✅ Share link generated:', shareUrl);
+        
+        res.json({
+            shareUrl,
+            shareCode,
+            trip: {
+                destination: trip.destination,
+                startDate: trip.startDate,
+                endDate: trip.endDate,
+                budget: trip.budget,
+                travellers: trip.travellers,
+                travelType: trip.travelType
+            }
+        });
+    } catch (err) {
+        console.error('❌ Error generating share link:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// View shared trip (public)
+app.get('/api/shared-trip/:shareCode', async (req, res) => {
+    try {
+        console.log('📥 Fetching shared trip with code:', req.params.shareCode);
+        
+        const shareCode = req.params.shareCode;
+        
+        // Find trip by shareCode
+        const trip = await Trip.findOne({ shareCode });
+        if (!trip) {
+            return res.status(404).json({ error: 'Trip not found' });
+        }
+        
+        // Get expenses for this trip
+        const expenses = await Expense.find({ tripId: trip._id });
+        
+        res.json({
+            trip: {
+                destination: trip.destination,
+                startDate: trip.startDate,
+                endDate: trip.endDate,
+                budget: trip.budget,
+                travellers: trip.travellers,
+                travelType: trip.travelType
+            },
+            expenses: expenses.map(e => ({
+                description: e.description,
+                amount: e.amount,
+                category: e.category,
+                date: e.date
+            }))
+        });
+    } catch (err) {
+        console.error('❌ Error fetching shared trip:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// ============ STATIC FILES SERVE - SAB SE NECHE ============
 app.use(express.static(path.join(__dirname)));
 
 app.get('*', (req, res) => {
@@ -633,81 +713,3 @@ app.listen(PORT, () => {
     console.log(`📦 Models: User, Trip, Expense`);
     console.log('='.repeat(50));
 });
-
-// ============ TRIP SHARING ============
-
-// Generate shareable link
-app.get('/api/trips/:tripId/share', auth, async (req, res) => {
-    try {
-        const tripId = req.params.tripId;
-        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
-        if (!trip) {
-            return res.status(404).json({ error: 'Trip not found' });
-        }
-
-        // Generate unique share code
-        const shareCode = Buffer.from(`${tripId}_${Date.now()}`).toString('base64').slice(0, 20);
-        
-        // Save share code to trip (optional - if you add shareCode field to schema)
-        // trip.shareCode = shareCode;
-        // await trip.save();
-
-        const shareUrl = `${process.env.FRONTEND_URL || 'https://travelos-neon.vercel.app'}/shared-trip/${shareCode}`;
-        
-        res.json({
-            shareUrl,
-            shareCode,
-            trip: {
-                destination: trip.destination,
-                startDate: trip.startDate,
-                endDate: trip.endDate,
-                budget: trip.budget,
-                travellers: trip.travellers,
-                travelType: trip.travelType
-            }
-        });
-    } catch (err) {
-        console.error('Error generating share link:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// View shared trip (public)
-app.get('/api/shared-trip/:shareCode', async (req, res) => {
-    try {
-        const shareCode = req.params.shareCode;
-        // Decode share code to get tripId
-        // For now, we'll use a simple approach - store shareCode in trip
-        // This is a simplified version - you can add shareCode field to TripSchema
-        
-        // Find trip by shareCode (if you add shareCode to schema)
-        // const trip = await Trip.findOne({ shareCode });
-        // if (!trip) return res.status(404).json({ error: 'Trip not found' });
-        
-        // For demo, we'll return a sample trip
-        // In production, you'll need to add shareCode field to TripSchema
-        
-        // For now, return sample data
-        res.json({
-            trip: {
-                destination: 'Jaipur',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
-                budget: 25000,
-                travellers: 2,
-                travelType: 'Friends'
-            },
-            expenses: [
-                { description: 'Flight', amount: 7500, category: 'flight', date: new Date() },
-                { description: 'Hotel', amount: 6000, category: 'hotel', date: new Date() }
-            ]
-        });
-    } catch (err) {
-        console.error('Error fetching shared trip:', err);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// Update TripSchema to include shareCode
-// Add this to TripSchema definition:
-// shareCode: { type: String, unique: true, sparse: true }
