@@ -36,6 +36,11 @@ function renderDashboard() {
             <h1 style="font-size:28px;font-weight:900;">Welcome back, ${state.user ? state.user.name : 'Traveller'}</h1>
             <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
         </div>
+
+        <!-- ✅ SHARE BUTTON - YAHAN ADD KARO -->
+            <button onclick="shareTrip()" class="btn btn-sm btn-ghost" title="Share Trip">
+                <i class="fas fa-share-alt"></i> Share
+            </button>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
                 <i class="fas fa-envelope"></i> Alert
