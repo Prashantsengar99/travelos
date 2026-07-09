@@ -36,11 +36,16 @@ function renderDashboard() {
             <h1 style="font-size:28px;font-weight:900;">Welcome back, ${state.user ? state.user.name : 'Traveller'}</h1>
             <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
         </div>
+         <!-- ✅ EXCEL EXPORT BUTTON -->
+    <button onclick="downloadExcel()" class="btn btn-sm btn-ghost" title="Download Excel Report">
+        <i class="fas fa-file-excel"></i> Excel
+    </button>
 
         <!-- ✅ SHARE BUTTON - YAHAN ADD KARO -->
             <button onclick="shareTrip()" class="btn btn-sm btn-ghost" title="Share Trip">
                 <i class="fas fa-share-alt"></i> Share
             </button>
+
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
                 <i class="fas fa-envelope"></i> Alert
@@ -584,3 +589,53 @@ window.copyShareLink = copyShareLink;
 window.shareViaWhatsApp = shareViaWhatsApp;
 window.shareViaEmail = shareViaEmail;
 window.shareViaTwitter = shareViaTwitter;
+
+// ============================================================
+// EXCEL EXPORT FUNCTION
+// ============================================================
+
+async function downloadExcel() {
+    const t = getTrip();
+    if (!t) {
+        toast('No active trip!', 'warning');
+        return;
+    }
+    
+    const tripId = t._id || t.id;
+    const token = authAPI.getToken();
+    
+    try {
+        toast('Generating Excel report...', 'info');
+        
+        const response = await fetch(`${API_URL}/trips/${tripId}/excel`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error || 'Failed to generate Excel');
+        }
+        
+        // Download Excel file
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `expenses-${t.destination}-${Date.now()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        
+        toast('Excel downloaded successfully! 📊', 'success');
+        
+    } catch (err) {
+        console.error('Excel Download Error:', err);
+        toast('Failed to download Excel: ' + err.message, 'danger');
+    }
+}
+
+// Make globally available
+window.downloadExcel = downloadExcel;

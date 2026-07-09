@@ -694,7 +694,128 @@ app.get('/api/shared-trip/:shareCode', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// ============ EXCEL EXPORT ============
+const XLSX = require('xlsx');
 
+// Generate Excel file for expenses
+app.get('/api/trips/:tripId/excel', auth, async (req, res) => {
+    try {
+        const tripId = req.params.tripId;
+        const trip = await Trip.findOne({ _id: tripId, userId: req.user._id });
+        if (!trip) {
+            return res.status(404).json({ error: 'Trip not found' });
+        }
+
+        const expenses = await Expense.find({ tripId: tripId, userId: req.user._id }).sort({ date: -1 });
+        const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+        const remaining = trip.budget - totalSpent;
+        const pct = Math.round((totalSpent / trip.budget) * 100);
+
+        // Category totals
+        const categoryTotals = {};
+        expenses.forEach(e => {
+            categoryTotals[e.category] = (categoryTotals[e.category] || 0) + e.amount;
+        });
+
+        // ============ CREATE EXCEL ============
+        const workbook = XLSX.utils.book_new();
+
+        // 1. Summary Sheet
+        const summaryData = [
+            ['TravelOS - Trip Expense Report'],
+            [],
+            ['Trip Details'],
+            ['Destination', trip.destination],
+            ['Start Date', new Date(trip.startDate).toLocaleDateString()],
+            ['End Date', new Date(trip.endDate).toLocaleDateString()],
+            ['Travellers', trip.travellers],
+            ['Travel Type', trip.travelType],
+            [],
+            ['Budget Summary'],
+            ['Total Budget', trip.budget],
+            ['Total Spent', totalSpent],
+            ['Remaining', remaining],
+            ['Budget Used', pct + '%'],
+            [],
+            ['Category Breakdown'],
+            ['Category', 'Amount', 'Percentage']
+        ];
+
+        Object.entries(categoryTotals)
+            .sort((a, b) => b[1] - a[1])
+            .forEach(([cat, amount]) => {
+                const catPct = Math.round((amount / totalSpent) * 100);
+                summaryData.push([cat, amount, catPct + '%']);
+            });
+
+        const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(workbook, summarySheet, 'Summary');
+
+        // 2. Expenses Sheet
+        const expenseData = [
+            ['Date', 'Description', 'Category', 'Amount (₹)', 'Trip']
+        ];
+
+        expenses.forEach(e => {
+            expenseData.push([
+                new Date(e.date).toLocaleDateString(),
+                e.description,
+                e.category,
+                e.amount,
+                trip.destination
+            ]);
+        });
+
+        // Add total row
+        expenseData.push(['', '', 'TOTAL', totalSpent, '']);
+
+        const expenseSheet = XLSX.utils.aoa_to_sheet(expenseData);
+        XLSX.utils.book_append_sheet(workbook, expenseSheet, 'Expenses');
+
+        // 3. Daily Breakdown Sheet
+        const dailyTotals = {};
+        expenses.forEach(e => {
+            const date = new Date(e.date).toLocaleDateString();
+            dailyTotals[date] = (dailyTotals[date] || 0) + e.amount;
+        });
+
+        const dailyData = [
+            ['Date', 'Spent', 'Category-wise Expenses']
+        ];
+
+        const dailyCategories = {};
+        expenses.forEach(e => {
+            const date = new Date(e.date).toLocaleDateString();
+            if (!dailyCategories[date]) dailyCategories[date] = {};
+            dailyCategories[date][e.category] = (dailyCategories[date][e.category] || 0) + e.amount;
+        });
+
+        Object.entries(dailyTotals).forEach(([date, total]) => {
+            const cats = dailyCategories[date] || {};
+            const catStr = Object.entries(cats)
+                .map(([cat, amt]) => `${cat}: ₹${amt}`)
+                .join(', ');
+            dailyData.push([date, total, catStr]);
+        });
+
+        const dailySheet = XLSX.utils.aoa_to_sheet(dailyData);
+        XLSX.utils.book_append_sheet(workbook, dailySheet, 'Daily Breakdown');
+
+        // ============ GENERATE EXCEL FILE ============
+        const filename = `expenses-${trip.destination}-${Date.now()}.xlsx`;
+        const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+        res.send(buffer);
+
+        console.log(`✅ Excel generated: ${filename}`);
+
+    } catch (err) {
+        console.error('Excel Generation Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 // ============ STATIC FILES SERVE - SAB SE NECHE ============
 app.use(express.static(path.join(__dirname)));
 
