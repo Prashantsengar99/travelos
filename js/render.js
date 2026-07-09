@@ -36,25 +36,21 @@ function renderDashboard() {
             <h1 style="font-size:28px;font-weight:900;">Welcome back, ${state.user ? state.user.name : 'Traveller'}</h1>
             <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
         </div>
-         <!-- ✅ EXCEL EXPORT BUTTON -->
-    <button onclick="downloadExcel()" class="btn btn-sm btn-ghost" title="Download Excel Report">
-        <i class="fas fa-file-excel"></i> Excel
-    </button>
-
-        <!-- ✅ SHARE BUTTON - YAHAN ADD KARO -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button onclick="shareTrip()" class="btn btn-sm btn-ghost" title="Share Trip">
                 <i class="fas fa-share-alt"></i> Share
             </button>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="downloadTripPDF()" class="btn btn-sm btn-ghost" title="Download Trip Summary PDF">
+                <i class="fas fa-file-pdf"></i> PDF
+            </button>
+            <button onclick="downloadExcel()" class="btn btn-sm btn-ghost" title="Download Excel Report">
+                <i class="fas fa-file-excel"></i> Excel
+            </button>
             <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
                 <i class="fas fa-envelope"></i> Alert
             </button>
             <button onclick="sendTripSummaryEmail()" class="btn btn-sm btn-ghost" title="Send Trip Summary Email">
                 <i class="fas fa-file-export"></i> Summary
-            </button>
-            <button onclick="downloadTripPDF()" class="btn btn-sm btn-ghost" title="Download Trip Summary PDF">
-                <i class="fas fa-file-pdf"></i> PDF
             </button>
             <button onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Add Expense
@@ -433,16 +429,8 @@ async function sendTripSummaryEmail() {
     }
 }
 
-// ✅ Make globally available for onclick
-window.downloadTripPDF = downloadTripPDF;
-window.downloadExpensesPDF = downloadExpensesPDF;
-window.sendBudgetAlertEmail = sendBudgetAlertEmail;
-window.sendTripSummaryEmail = sendTripSummaryEmail;
-
-console.log('✅ PDF & Email Functions Loaded!');
-
 // ============================================================
-// TRIP SHARING FUNCTION
+// TRIP SHARING FUNCTIONS
 // ============================================================
 
 async function shareTrip() {
@@ -469,8 +457,6 @@ async function shareTrip() {
         }
         
         const data = await response.json();
-        
-        // Show share modal
         showShareModal(data.shareUrl, data.trip);
         
     } catch (err) {
@@ -479,12 +465,7 @@ async function shareTrip() {
     }
 }
 
-// ============================================================
-// SHARE MODAL
-// ============================================================
-
 function showShareModal(shareUrl, trip) {
-    // Remove existing modal if any
     const existingModal = document.getElementById('shareModal');
     if (existingModal) existingModal.remove();
     
@@ -539,10 +520,6 @@ function showShareModal(shareUrl, trip) {
     document.body.appendChild(modal);
 }
 
-// ============================================================
-// SHARE HELPERS
-// ============================================================
-
 function closeShareModal() {
     const modal = document.getElementById('shareModal');
     if (modal) modal.remove();
@@ -551,7 +528,6 @@ function closeShareModal() {
 function copyShareLink() {
     const input = document.getElementById('shareLinkInput');
     if (!input) return;
-    
     input.select();
     document.execCommand('copy');
     toast('Link copied to clipboard! 📋', 'success');
@@ -582,14 +558,6 @@ function shareViaTwitter() {
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
 }
 
-// Make globally available
-window.shareTrip = shareTrip;
-window.closeShareModal = closeShareModal;
-window.copyShareLink = copyShareLink;
-window.shareViaWhatsApp = shareViaWhatsApp;
-window.shareViaEmail = shareViaEmail;
-window.shareViaTwitter = shareViaTwitter;
-
 // ============================================================
 // EXCEL EXPORT FUNCTION
 // ============================================================
@@ -618,7 +586,6 @@ async function downloadExcel() {
             throw new Error(error.error || 'Failed to generate Excel');
         }
         
-        // Download Excel file
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -637,5 +604,20 @@ async function downloadExcel() {
     }
 }
 
-// Make globally available
+// ============================================================
+// MAKE GLOBALLY AVAILABLE
+// ============================================================
+
+window.downloadTripPDF = downloadTripPDF;
+window.downloadExpensesPDF = downloadExpensesPDF;
+window.sendBudgetAlertEmail = sendBudgetAlertEmail;
+window.sendTripSummaryEmail = sendTripSummaryEmail;
+window.shareTrip = shareTrip;
+window.closeShareModal = closeShareModal;
+window.copyShareLink = copyShareLink;
+window.shareViaWhatsApp = shareViaWhatsApp;
+window.shareViaEmail = shareViaEmail;
+window.shareViaTwitter = shareViaTwitter;
 window.downloadExcel = downloadExcel;
+
+console.log('✅ All Functions Loaded: PDF, Email, Share, Excel!');
