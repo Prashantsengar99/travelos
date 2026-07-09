@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shared Trip - TravelOS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0B0D14;
+            --bg2: #11131C;
+            --card: #171A28;
+            --border: #252940;
+            --text: #E6E7EE;
+            --text2: #8B8DA0;
+            --text3: #555770;
+            --accent: #F5A623;
+            --success: #22C55E;
+            --danger: #EF4444;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .container { max-width: 800px; margin: 0 auto; padding: 24px; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 40px auto; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        .badge-amber { background: rgba(245,166,35,0.15); color: var(--accent); }
+    </style>
+</head>
+<body>
+    <div class="container" id="app">
+        <div style="text-align:center;padding:40px 0;">
+            <div style="font-size:28px;font-weight:900;font-family:'Outfit';background:linear-gradient(135deg,#F5A623,#FF6B35);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">
+                TravelOS
+            </div>
+            <p style="color:var(--text3);margin-top:4px;">Shared Trip View</p>
+        </div>
+        
+        <div id="loading" style="text-align:center;">
+            <div class="spinner"></div>
+            <p style="color:var(--text3);margin-top:16px;">Loading trip details...</p>
+        </div>
+        
+        <div id="tripContent" style="display:none;">
+            <div class="card" style="margin-bottom:16px;">
+                <h2 id="tripTitle" style="font-size:24px;font-weight:800;"></h2>
+                <p id="tripDates" style="color:var(--text2);font-size:14px;margin-top:4px;"></p>
+                <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
+                    <span class="badge badge-amber" id="tripType"></span>
+                    <span class="badge" style="background:var(--border);color:var(--text2);" id="tripTravellers"></span>
+                </div>
+            </div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div class="card" style="text-align:center;padding:16px;">
+                    <div style="font-size:12px;color:var(--text3);">Budget</div>
+                    <div style="font-size:20px;font-weight:800;font-family:'Outfit';" id="tripBudget"></div>
+                </div>
+                <div class="card" style="text-align:center;padding:16px;">
+                    <div style="font-size:12px;color:var(--text3);">Spent</div>
+                    <div style="font-size:20px;font-weight:800;font-family:'Outfit';color:var(--danger);" id="tripSpent"></div>
+                </div>
+                <div class="card" style="text-align:center;padding:16px;">
+                    <div style="font-size:12px;color:var(--text3);">Remaining</div>
+                    <div style="font-size:20px;font-weight:800;font-family:'Outfit';color:var(--success);" id="tripRemaining"></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h4 style="font-size:15px;font-weight:700;margin-bottom:12px;">📝 Expenses</h4>
+                <div id="expensesList"></div>
+            </div>
+            
+            <div style="text-align:center;margin-top:24px;padding:20px;border-top:1px solid var(--border);">
+                <p style="color:var(--text3);font-size:12px;">
+                    Made with ❤️ by <span style="color:var(--accent);">TravelOS</span>
+                </p>
+            </div>
+        </div>
+        
+        <div id="errorContent" style="display:none;text-align:center;padding:40px;">
+            <i class="fas fa-exclamation-triangle" style="font-size:48px;color:var(--danger);"></i>
+            <h3 style="color:var(--text2);margin-top:16px;">Trip not found</h3>
+            <p style="color:var(--text3);font-size:14px;margin-top:8px;">The trip you're looking for doesn't exist or has been removed.</p>
+        </div>
+    </div>
+
+    <script>
+        // Get share code from URL
+        const path = window.location.pathname;
+        const shareCode = path.split('/').pop();
+        
+        // Show loading
+        document.getElementById('loading').style.display = 'block';
+        
+        // Fetch trip data
+        fetch(`https://travelos-mkpn.onrender.com/api/shared-trip/${shareCode}`)
+            .then(r => {
+                if (!r.ok) throw new Error('Trip not found');
+                return r.json();
+            })
+            .then(data => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('tripContent').style.display = 'block';
+                
+                const trip = data.trip;
+                const expenses = data.expenses || [];
+                
+                // Fill trip details
+                document.getElementById('tripTitle').textContent = trip.destination;
+                document.getElementById('tripDates').textContent = 
+                    `${new Date(trip.startDate).toLocaleDateString()} - ${new Date(trip.endDate).toLocaleDateString()}`;
+                document.getElementById('tripType').textContent = trip.travelType;
+                document.getElementById('tripTravellers').textContent = `${trip.travellers} Traveller${trip.travellers > 1 ? 's' : ''}`;
+                
+                const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0);
+                document.getElementById('tripBudget').textContent = `₹${trip.budget.toLocaleString()}`;
+                document.getElementById('tripSpent').textContent = `₹${totalSpent.toLocaleString()}`;
+                document.getElementById('tripRemaining').textContent = `₹${(trip.budget - totalSpent).toLocaleString()}`;
+                
+                // Expenses list
+                const expensesList = document.getElementById('expensesList');
+                if (expenses.length === 0) {
+                    expensesList.innerHTML = '<p style="color:var(--text3);font-size:14px;text-align:center;padding:20px;">No expenses added yet</p>';
+                } else {
+                    expensesList.innerHTML = expenses.slice(0, 10).map(e => `
+                        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);">
+                            <div>
+                                <div style="font-size:14px;font-weight:600;">${e.description}</div>
+                                <div style="font-size:12px;color:var(--text3);">${e.category}</div>
+                            </div>
+                            <div style="font-weight:700;font-family:'Outfit';color:var(--danger);">₹${e.amount.toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                }
+            })
+            .catch(err => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('errorContent').style.display = 'block';
+                console.error('Error:', err);
+            });
+    </script>
+</body>
+</html>

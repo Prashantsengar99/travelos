@@ -211,9 +211,12 @@ function renderTripDetails() {
                     ${new Date(t.startDate).toLocaleDateString()} - ${new Date(t.endDate).toLocaleDateString()}
                 </p>
             </div>
-            <div style="display:flex;gap:8px;">
-                <button onclick="downloadTripPDF()" class="btn btn-primary">
-                    <i class="fas fa-file-pdf"></i> Trip Summary
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="shareTrip()" class="btn btn-primary">
+                    <i class="fas fa-share-alt"></i> Share Trip
+                </button>
+                <button onclick="downloadTripPDF()" class="btn btn-ghost">
+                    <i class="fas fa-file-pdf"></i> PDF
                 </button>
                 <button onclick="downloadExpensesPDF()" class="btn btn-ghost">
                     <i class="fas fa-file-pdf"></i> Expenses
@@ -221,6 +224,7 @@ function renderTripDetails() {
             </div>
         </div>
         
+        <!-- Trip Stats -->
         <div class="card">
             <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">Trip Stats</h3>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
@@ -426,3 +430,152 @@ window.sendBudgetAlertEmail = sendBudgetAlertEmail;
 window.sendTripSummaryEmail = sendTripSummaryEmail;
 
 console.log('✅ PDF & Email Functions Loaded!');
+
+// ============================================================
+// TRIP SHARING FUNCTION
+// ============================================================
+
+async function shareTrip() {
+    const t = getTrip();
+    if (!t) {
+        toast('No active trip!', 'warning');
+        return;
+    }
+    
+    const tripId = t._id || t.id;
+    const token = authAPI.getToken();
+    
+    try {
+        toast('Generating share link...', 'info');
+        
+        const response = await fetch(`${API_URL}/trips/${tripId}/share`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate share link');
+        }
+        
+        const data = await response.json();
+        
+        // Show share modal
+        showShareModal(data.shareUrl, data.trip);
+        
+    } catch (err) {
+        console.error('Share Error:', err);
+        toast('Failed to generate share link: ' + err.message, 'danger');
+    }
+}
+
+// ============================================================
+// SHARE MODAL
+// ============================================================
+
+function showShareModal(shareUrl, trip) {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('shareModal');
+    if (existingModal) existingModal.remove();
+    
+    const modal = document.createElement('div');
+    modal.id = 'shareModal';
+    modal.className = 'modal-overlay open';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal" style="max-width:500px;position:relative;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+                <h3 style="font-size:20px;font-weight:800;">
+                    <i class="fas fa-share-alt" style="color:var(--accent);"></i> Share Trip
+                </h3>
+                <button onclick="closeShareModal()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:20px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div style="background:var(--bg);border-radius:10px;padding:16px;margin-bottom:16px;border:1px solid var(--border);">
+                <p style="font-size:13px;color:var(--text2);margin-bottom:8px;">
+                    <strong>${trip.destination}</strong> trip share link
+                </p>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="shareLinkInput" class="input-field" value="${shareUrl}" readonly style="flex:1;font-size:13px;">
+                    <button onclick="copyShareLink()" class="btn btn-primary" style="white-space:nowrap;">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <button onclick="shareViaWhatsApp()" class="btn btn-ghost" style="flex:1;justify-content:center;background:#25D366;color:#fff;border-color:#25D366;">
+                    <i class="fab fa-whatsapp"></i> WhatsApp
+                </button>
+                <button onclick="shareViaEmail()" class="btn btn-ghost" style="flex:1;justify-content:center;background:#EA4335;color:#fff;border-color:#EA4335;">
+                    <i class="fas fa-envelope"></i> Email
+                </button>
+                <button onclick="shareViaTwitter()" class="btn btn-ghost" style="flex:1;justify-content:center;background:#1DA1F2;color:#fff;border-color:#1DA1F2;">
+                    <i class="fab fa-twitter"></i> Twitter
+                </button>
+            </div>
+            
+            <div style="margin-top:16px;padding:12px;background:rgba(245,166,35,0.08);border-radius:8px;border:1px solid rgba(245,166,35,0.15);">
+                <p style="font-size:12px;color:var(--text3);text-align:center;margin:0;">
+                    💡 Share this link with friends to view trip details
+                </p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+// ============================================================
+// SHARE HELPERS
+// ============================================================
+
+function closeShareModal() {
+    const modal = document.getElementById('shareModal');
+    if (modal) modal.remove();
+}
+
+function copyShareLink() {
+    const input = document.getElementById('shareLinkInput');
+    if (!input) return;
+    
+    input.select();
+    document.execCommand('copy');
+    toast('Link copied to clipboard! 📋', 'success');
+}
+
+function shareViaWhatsApp() {
+    const input = document.getElementById('shareLinkInput');
+    if (!input) return;
+    const url = input.value;
+    const text = encodeURIComponent(`Check out my trip! 🚀\n\n${url}`);
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+}
+
+function shareViaEmail() {
+    const input = document.getElementById('shareLinkInput');
+    if (!input) return;
+    const url = input.value;
+    const subject = encodeURIComponent('My Trip Plan');
+    const body = encodeURIComponent(`Check out my trip plan!\n\n${url}`);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+}
+
+function shareViaTwitter() {
+    const input = document.getElementById('shareLinkInput');
+    if (!input) return;
+    const url = input.value;
+    const text = encodeURIComponent('Check out my trip plan! 🚀');
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
+}
+
+// Make globally available
+window.shareTrip = shareTrip;
+window.closeShareModal = closeShareModal;
+window.copyShareLink = copyShareLink;
+window.shareViaWhatsApp = shareViaWhatsApp;
+window.shareViaEmail = shareViaEmail;
+window.shareViaTwitter = shareViaTwitter;
