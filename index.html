@@ -265,7 +265,8 @@
     // ✅ Yeh sab code hatado, api.js handle karega
     
     // Bas yeh line rakho (agar kuch aur ho toh)
-    console.log('⏳ Waiting for api.js to load...');
+   const API_URL = 'https://travelos-mkpn.onrender.com/api'; 
+   let authToken = localStorage.getItem('travelos_token');
 
     // ============================================================
     // API HELPER
