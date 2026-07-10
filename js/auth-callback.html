@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>TravelOS - Login Successful</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #0B0D14;
+            font-family: 'DM Sans', sans-serif;
+            color: #E6E7EE;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: #171A28;
+            border-radius: 14px;
+            border: 1px solid #252940;
+        }
+        .spinner {
+            border: 4px solid #252940;
+            border-top-color: #F5A623;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 style="color: #F5A623;">✅ Login Successful!</h1>
+        <div class="spinner"></div>
+        <p>Redirecting to Dashboard...</p>
+    </div>
+    <script>
+        // Get token from URL
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get('token');
+        const name = params.get('name');
+        
+        if (token) {
+            localStorage.setItem('travelos_token', token);
+            localStorage.setItem('travelos_user', JSON.stringify({ name: name || 'User' }));
+            console.log('✅ Token saved from social login');
+            
+            // Redirect to main app
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 2000);
+        } else {
+            console.error('❌ No token received');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
