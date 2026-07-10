@@ -9,6 +9,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <!-- PWA Meta Tags -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F5A623">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TravelOS">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<!-- Apple Touch Icon - Default -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' fill='%230B0D14' rx='36'/%3E%3Ctext x='96' y='130' font-family='Arial' font-size='80' font-weight='bold' text-anchor='middle' fill='%23F5A623'%3E✈%3C/text%3E%3C/svg%3E">
+
 </head>
 <body>
     <!-- Splash Screen -->
@@ -55,6 +66,10 @@
                 <div class="nav-item" data-page="itinerary" onclick="navigate('itinerary')">
                     <span class="nav-icon"><i class="fas fa-calendar-alt"></i></span><span class="nav-label">Itinerary</span>
                 </div>
+               <div class="nav-item" data-page="ai-planner" onclick="renderAIPlanner()">
+                <span class="nav-icon"><i class="fas fa-robot"></i></span>
+                <span class="nav-label">AI Planner</span>
+                </div>
                 <div style="padding:0 8px;margin:12px 0 6px;"><span class="nav-label" style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:1px;">Tools</span></div>
                 <div class="nav-item" data-page="split" onclick="navigate('split')">
                     <span class="nav-icon"><i class="fas fa-users"></i></span><span class="nav-label">Split Expenses</span>
@@ -68,7 +83,14 @@
                 <div class="nav-item" data-page="badges" onclick="navigate('badges')">
                     <span class="nav-icon"><i class="fas fa-trophy"></i></span><span class="nav-label">Badges</span>
                 </div>
+                <!-- ✅ SPLIT CALCULATOR - SIDEBAR BUTTON -->
+                <div class="nav-item" onclick="window.open('split-calculator.html', '_blank')">
+                    <span class="nav-icon"><i class="fas fa-calculator"></i></span>
+                    <span class="nav-label">Split Calc</span>
+                </div>
             </div>
+            
+            
             <div style="margin-top:auto;padding:16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:700;font-size:14px;color:#fff;" id="userAvatar">T</div>
                 <div class="user-info" style="flex:1;">
@@ -828,7 +850,26 @@
                 <h1 style="font-size:28px;font-weight:900;">Welcome back, ${state.user ? state.user.name : 'Traveller'}</h1>
                 <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
             </div>
-            <button class="btn btn-primary" onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()"><i class="fas fa-plus"></i> Add Expense</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="window.open('split-calculator.html', '_blank')" class="btn btn-sm btn-ghost" title="Open Split Calculator">
+                    <i class="fas fa-calculator"></i> Split Calc
+                </button>
+                <button onclick="shareTrip()" class="btn btn-sm btn-ghost" title="Share Trip">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+                <button onclick="downloadTripPDF()" class="btn btn-sm btn-ghost" title="Download Trip Summary PDF">
+                    <i class="fas fa-file-pdf"></i> PDF
+                </button>
+                <button onclick="downloadExcel()" class="btn btn-sm btn-ghost" title="Download Excel Report">
+                    <i class="fas fa-file-excel"></i> Excel
+                </button>
+                <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
+                    <i class="fas fa-envelope"></i> Alert
+                </button>
+                <button onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Expense
+                </button>
+            </div>
         </div>
 
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px;">
@@ -1901,6 +1942,78 @@
     console.log('🔑 Logged in:', authAPI.isLoggedIn());
     console.log('📦 Trips:', state.trips.length);
     console.log('💰 Expenses:', state.expenses.length);
+
+
+
+
+
+<!-- Service Worker Registration -->
+
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('✅ Service Worker registered:', registration);
+                    
+                    // Request push notification permission
+                    if ('Notification' in window && Notification.permission === 'default') {
+                        Notification.requestPermission();
+                    }
+                })
+                .catch(err => {
+                    console.log('❌ Service Worker registration failed:', err);
+                });
+        });
+    }
+
+    // Check if app can be installed
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        // Show install button
+        showInstallButton();
+    });
+
+    function showInstallButton() {
+        const installBtn = document.createElement('button');
+        installBtn.id = 'installBtn';
+        installBtn.innerHTML = '📲 Install App';
+        installBtn.style.cssText = `
+            position: fixed;
+            bottom: 90px;
+            left: 24px;
+            z-index: 100;
+            background: linear-gradient(135deg, #F5A623, #FF6B35);
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(245,166,35,0.4);
+            display: none;
+        `;
+        installBtn.onclick = () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('✅ App installed!');
+                        installBtn.style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            }
+        };
+        document.body.appendChild(installBtn);
+        
+        // Show button after user interaction
+        document.addEventListener('click', () => {
+            installBtn.style.display = 'block';
+        }, { once: true });
+    }
+
     </script>
 <!-- ============================================================ -->
 <!-- JAVASCRIPT FILES (Order Matters!) -->
@@ -1926,6 +2039,9 @@
 
 <!-- 7. Main App - Sab se akhir mein -->
 <script src="js/app.js"></script>
+
+<!-- PWA Icons -->
+<script src="js/icons.js"></script>
 
 <!-- ============================================================ -->
 </body>

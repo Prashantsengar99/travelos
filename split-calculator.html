@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Split Expense Calculator - TravelOS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .split-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 24px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+        }
+        .split-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .split-input-group input {
+            flex: 1;
+            min-width: 120px;
+        }
+        .split-list-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+        .split-list-item:last-child { border-bottom: none; }
+        .split-result {
+            margin-top: 16px;
+            padding: 16px;
+            background: var(--bg);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .split-result h4 {
+            color: var(--accent);
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+        .split-result p {
+            margin: 4px 0;
+            font-size: 14px;
+        }
+        .text-green { color: var(--success); }
+        .text-red { color: var(--danger); }
+        .btn-calc {
+            background: linear-gradient(135deg, var(--accent), #FF6B35);
+            color: #000;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+            transition: all 0.3s;
+        }
+        .btn-calc:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(245,166,35,0.3);
+        }
+        .btn-add {
+            background: var(--accent);
+            color: #000;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-add:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(245,166,35,0.3);
+        }
+        .total-head {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 14px;
+            background: rgba(245,166,35,0.08);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text);
+        }
+        .clear-btn {
+            background: rgba(239,68,68,0.15);
+            color: var(--danger);
+            padding: 6px 14px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+        .clear-btn:hover {
+            background: rgba(239,68,68,0.25);
+        }
+        .member-count {
+            color: var(--text2);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" style="max-width:700px;margin:0 auto;padding:24px;">
+        <!-- Header -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+            <a href="https://travelos-neon.vercel.app/" style="color:var(--accent);text-decoration:none;font-size:20px;">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h2 style="font-size:24px;font-weight:800;font-family:'Outfit';">
+                <i class="fas fa-calculator" style="color:var(--accent);"></i> Split Expense Calculator
+            </h2>
+        </div>
+
+        <div class="split-container">
+            <!-- Input Section -->
+            <div class="split-input-group">
+                <input type="text" id="splitName" class="input-field" placeholder="Person Name" style="flex:1;">
+                <input type="number" id="splitAmount" class="input-field" placeholder="Amount ₹" style="flex:1;">
+                <button onclick="addSplitMember()" class="btn-add">
+                    <i class="fas fa-plus"></i> Add
+                </button>
+            </div>
+
+            <!-- Member Count -->
+            <div class="member-count" id="memberCount">👥 0 members added</div>
+
+            <!-- Member List -->
+            <div id="splitMemberList"></div>
+
+            <!-- Calculate Button -->
+            <button onclick="calculateSplit()" class="btn-calc">
+                <i class="fas fa-calculator"></i> Calculate Split
+            </button>
+
+            <!-- Result -->
+            <div id="splitResult" class="split-result" style="display:none;"></div>
+        </div>
+
+        <!-- How to Use -->
+        <div style="margin-top:20px;padding:16px;background:var(--card);border:1px solid var(--border);border-radius:10px;">
+            <p style="color:var(--text2);font-size:13px;margin:0;">
+                <i class="fas fa-lightbulb" style="color:var(--accent);"></i>
+                <strong>How to use:</strong> Add each person's name and amount they paid. Click Calculate to see who owes whom.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let splitMembers = [];
+
+        function addSplitMember() {
+            const nameInput = document.getElementById('splitName');
+            const amountInput = document.getElementById('splitAmount');
+            const name = nameInput.value.trim();
+            const amount = parseFloat(amountInput.value);
+
+            if (!name || !amount || amount <= 0) {
+                alert('Please enter valid name and amount!');
+                return;
+            }
+
+            splitMembers.push({ name, paid: amount });
+            nameInput.value = '';
+            amountInput.value = '';
+            updateSplitList();
+        }
+
+        function updateSplitList() {
+            const list = document.getElementById('splitMemberList');
+            const count = document.getElementById('memberCount');
+            
+            if (splitMembers.length === 0) {
+                list.innerHTML = `<div style="color:var(--text3);text-align:center;padding:20px;font-size:14px;">No members added yet</div>`;
+                count.textContent = '👥 0 members added';
+                return;
+            }
+
+            const total = splitMembers.reduce((sum, m) => sum + m.paid, 0);
+            count.textContent = `👥 ${splitMembers.length} members · Total: ₹${total.toFixed(2)}`;
+
+            list.innerHTML = splitMembers.map((m, i) => `
+                <div class="split-list-item">
+                    <span><strong>${m.name}</strong></span>
+                    <span>
+                        ₹${m.paid.toFixed(2)}
+                        <button onclick="removeSplitMember(${i})" class="clear-btn" style="margin-left:10px;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </span>
+                </div>
+            `).join('');
+
+            // Hide result when members change
+            document.getElementById('splitResult').style.display = 'none';
+        }
+
+        function removeSplitMember(index) {
+            splitMembers.splice(index, 1);
+            updateSplitList();
+        }
+
+        function calculateSplit() {
+            if (splitMembers.length < 2) {
+                alert('Add at least 2 members to calculate split!');
+                return;
+            }
+
+            const total = splitMembers.reduce((sum, m) => sum + m.paid, 0);
+            const perHead = total / splitMembers.length;
+            const resultDiv = document.getElementById('splitResult');
+            
+            let html = `
+                <div class="total-head">
+                    <span>Total: ₹${total.toFixed(2)}</span>
+                    <span>Per Person: ₹${perHead.toFixed(2)}</span>
+                </div>
+            `;
+
+            // Sort members by difference (descending)
+            const sorted = [...splitMembers].sort((a, b) => (b.paid - perHead) - (a.paid - perHead));
+
+            sorted.forEach(m => {
+                const diff = m.paid - perHead;
+                const color = diff >= 0 ? 'text-green' : 'text-red';
+                const icon = diff >= 0 ? 'fa-arrow-down' : 'fa-arrow-up';
+                const text = diff >= 0 ? 'Gets back' : 'Needs to pay';
+                html += `
+                    <p class="${color}">
+                        <i class="fas ${icon}" style="font-size:12px;"></i>
+                        <strong>${m.name}</strong>: ${text} ₹${Math.abs(diff).toFixed(2)}
+                    </p>
+                `;
+            });
+
+            // Settlement summary
+            const debtors = sorted.filter(m => m.paid - perHead < 0);
+            const creditors = sorted.filter(m => m.paid - perHead > 0);
+
+            if (debtors.length > 0 && creditors.length > 0) {
+                html += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">
+                    <p style="color:var(--text2);font-size:13px;font-weight:600;">📝 Settlements</p>`;
+                
+                // Simple settlement algorithm
+                let i = 0, j = 0;
+                while (i < debtors.length && j < creditors.length) {
+                    const debtor = debtors[i];
+                    const creditor = creditors[j];
+                    const amount = Math.min(Math.abs(debtor.paid - perHead), creditor.paid - perHead);
+                    if (amount > 0.01) {
+                        html += `<p style="color:var(--text);font-size:13px;">
+                            <strong>${debtor.name}</strong> pays <strong>${creditor.name}</strong> ₹${amount.toFixed(2)}
+                        </p>`;
+                    }
+                    // Adjust remaining
+                    debtor.paid += amount;
+                    creditor.paid -= amount;
+                    if (debtor.paid >= perHead) i++;
+                    if (creditor.paid <= perHead) j++;
+                }
+                html += `</div>`;
+            }
+
+            resultDiv.innerHTML = html;
+            resultDiv.style.display = 'block';
+        }
+
+        // Enter key support
+        document.getElementById('splitAmount').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addSplitMember();
+        });
+        document.getElementById('splitName').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('splitAmount').focus();
+        });
+
+        // Initial state
+        updateSplitList();
+    </script>
+</body>
+</html>

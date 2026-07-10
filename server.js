@@ -816,6 +816,8 @@ app.get('/api/trips/:tripId/excel', auth, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+
 // ============ STATIC FILES SERVE - SAB SE NECHE ============
 app.use(express.static(path.join(__dirname)));
 
@@ -833,4 +835,62 @@ app.listen(PORT, () => {
     console.log(`🔐 JWT: ${process.env.JWT_SECRET ? '✅ Configured' : '❌ Not configured'}`);
     console.log(`📦 Models: User, Trip, Expense`);
     console.log('='.repeat(50));
+});
+
+// ============ AI TRIP PLANNER ============
+const OpenAI = require('openai');
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+});
+
+app.post('/api/ai/trip-plan', auth, async (req, res) => {
+    try {
+        const { destination, days, budget, travellers, interests } = req.body;
+        
+        console.log('📝 Generating AI trip plan for:', destination);
+        
+        let prompt = `Create a detailed ${days}-day trip plan for ${destination} with a budget of ₹${budget}.`;
+        prompt += ` Number of travellers: ${travellers || 1}.`;
+        prompt += ` Interests: ${interests ? interests.join(', ') : 'sightseeing, food, culture'}.`;
+        
+        prompt += ` Include:
+        1. Day-wise itinerary with timing
+        2. Estimated costs for each activity
+        3. Food recommendations (must-try dishes)
+        4. Places to visit with entry fees
+        5. Transportation tips
+        6. Budget breakdown
+        7. Money-saving tips
+        8. Packing recommendations`;
+        
+        const response = await openai.chat.completions.create({
+            model: "gpt-3.5-turbo",
+            messages: [
+                { 
+                    role: "system", 
+                    content: "You are an expert travel planner. Provide detailed, practical, and budget-friendly trip plans. Use Indian Rupees (₹) for all costs."
+                },
+                { role: "user", content: prompt }
+            ],
+            max_tokens: 1500,
+            temperature: 0.7
+        });
+        
+        const plan = response.choices[0].message.content;
+        
+        console.log('✅ AI trip plan generated');
+        
+        res.json({
+            success: true,
+            plan: plan
+        });
+        
+    } catch (err) {
+        console.error('❌ AI Trip Plan Error:', err);
+        res.status(500).json({ 
+            success: false,
+            error: err.message 
+        });
+    }
 });

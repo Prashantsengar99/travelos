@@ -37,6 +37,9 @@ function renderDashboard() {
             <p style="color:var(--text2);margin-top:4px;font-size:14px;">${t.destination} trip — ${t.travelType} | ${t.travellers} traveller${t.travellers > 1 ? 's' : ''}</p>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="window.open('split-calculator.html', '_blank')" class="btn btn-sm btn-ghost" title="Open Split Calculator">
+                <i class="fas fa-calculator"></i> Split Calc
+            </button>
             <button onclick="shareTrip()" class="btn btn-sm btn-ghost" title="Share Trip">
                 <i class="fas fa-share-alt"></i> Share
             </button>
@@ -48,9 +51,6 @@ function renderDashboard() {
             </button>
             <button onclick="sendBudgetAlertEmail()" class="btn btn-sm btn-ghost" title="Send Budget Alert Email">
                 <i class="fas fa-envelope"></i> Alert
-            </button>
-            <button onclick="sendTripSummaryEmail()" class="btn btn-sm btn-ghost" title="Send Trip Summary Email">
-                <i class="fas fa-file-export"></i> Summary
             </button>
             <button onclick="openModal('expenseModal');document.getElementById('expDate').value=todayStr()" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Add Expense
@@ -230,7 +230,6 @@ function renderTripDetails() {
             </div>
         </div>
         
-        <!-- Trip Stats -->
         <div class="card">
             <h3 style="font-size:16px;font-weight:700;margin-bottom:12px;">Trip Stats</h3>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
@@ -605,6 +604,377 @@ async function downloadExcel() {
 }
 
 // ============================================================
+// AI TRIP PLANNER - RENDER
+// ============================================================
+
+function renderAIPlanner() {
+    console.log('✅ AI Planner Loaded!');
+    
+    const content = document.getElementById('content');
+    
+    content.innerHTML = `
+    <div style="margin-bottom:24px;">
+        <h2 style="font-size:24px;font-weight:800;">
+            <i class="fas fa-robot" style="color:var(--accent);"></i> AI Trip Planner
+        </h2>
+        <p style="color:var(--text2);font-size:14px;margin-top:4px;">Get personalized trip plans powered by AI</p>
+    </div>
+    
+    <div class="card" style="max-width:700px;margin-bottom:24px;">
+        <form id="aiPlanForm" onsubmit="return false;">
+            <div style="display:grid;gap:16px;">
+                <div>
+                    <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">📍 Destination</label>
+                    <input type="text" class="input-field" id="aiDestination" placeholder="e.g., Jaipur, Goa, Kerala" required>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">📅 Days</label>
+                        <input type="number" class="input-field" id="aiDays" value="3" min="1" max="30" required>
+                    </div>
+                    <div>
+                        <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">💰 Budget (₹)</label>
+                        <input type="number" class="input-field" id="aiBudget" placeholder="25000" required min="1000">
+                    </div>
+                </div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">👥 Travellers</label>
+                    <input type="number" class="input-field" id="aiTravellers" value="1" min="1">
+                </div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px;">🎯 Interests (comma separated)</label>
+                    <input type="text" class="input-field" id="aiInterests" placeholder="sightseeing, food, adventure, culture">
+                </div>
+                <button type="button" class="btn btn-primary" style="width:100%;justify-content:center;" id="aiGenerateBtn" onclick="generateAIPlan()">
+                    <i class="fas fa-wand-magic-sparkles"></i> Generate AI Trip Plan
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <div id="aiLoading" style="display:none;text-align:center;padding:40px;">
+        <div class="spinner"></div>
+        <p style="color:var(--text2);margin-top:16px;">🤖 AI is creating your personalized trip plan...</p>
+        <p style="color:var(--text3);font-size:13px;margin-top:8px;">This may take a few seconds</p>
+    </div>
+    
+    <div id="aiResult" class="card" style="display:none;white-space:pre-wrap;font-size:14px;line-height:1.8;max-width:700px;">
+    </div>
+    
+    <div style="max-width:700px;margin-top:16px;">
+        <p style="color:var(--text2);font-size:13px;margin-bottom:8px;">💡 Quick Examples:</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="fillExample('jaipur')" class="btn btn-ghost btn-sm">Jaipur 3-Day ₹25,000</button>
+            <button onclick="fillExample('goa')" class="btn btn-ghost btn-sm">Goa 5-Day ₹40,000</button>
+            <button onclick="fillExample('kerala')" class="btn btn-ghost btn-sm">Kerala 4-Day ₹35,000</button>
+            <button onclick="fillExample('manali')" class="btn btn-ghost btn-sm">Manali 3-Day ₹20,000</button>
+        </div>
+    </div>
+    `;
+}
+
+// ============================================================
+// AI PLAN GENERATION - MOCK MODE (FORCE)
+// ============================================================
+
+async function generateAIPlan() {
+    const destination = document.getElementById('aiDestination').value.trim();
+    const days = parseInt(document.getElementById('aiDays').value);
+    const budget = parseInt(document.getElementById('aiBudget').value);
+    const travellers = parseInt(document.getElementById('aiTravellers').value) || 1;
+    const interests = document.getElementById('aiInterests').value.split(',').map(s => s.trim()).filter(Boolean);
+    
+    if (!destination) {
+        toast('Please enter a destination', 'warning');
+        return;
+    }
+    
+    // Show loading
+    document.getElementById('aiLoading').style.display = 'block';
+    document.getElementById('aiResult').style.display = 'none';
+    document.getElementById('aiGenerateBtn').disabled = true;
+    document.getElementById('aiGenerateBtn').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    
+    try {
+        // ✅ FORCE MOCK MODE - No API call, direct mock generation
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate delay
+        
+        const mockPlan = generateMockPlan(destination, days, budget, travellers, interests);
+        
+        // Store plan data
+        window._aiPlanData = { destination, days, budget, plan: mockPlan };
+        
+        document.getElementById('aiResult').style.display = 'block';
+        document.getElementById('aiResult').innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 style="font-size:18px;font-weight:800;color:var(--accent);">
+                    <i class="fas fa-robot"></i> AI Trip Plan: ${destination}
+                </h3>
+                <button onclick="copyAIPlan()" class="btn btn-ghost btn-sm">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+            <div style="background:var(--bg);padding:16px;border-radius:10px;border:1px solid var(--border);font-size:14px;line-height:1.8;white-space:pre-wrap;">
+                ${mockPlan}
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                <button onclick="saveAIPlanToTrip()" class="btn btn-primary btn-sm">
+                    <i class="fas fa-save"></i> Save as Trip
+                </button>
+                <button onclick="shareAIPlan()" class="btn btn-ghost btn-sm">
+                    <i class="fas fa-share-alt"></i> Share
+                </button>
+            </div>
+        `;
+        
+        toast('✅ AI trip plan generated!', 'success');
+        
+    } catch (err) {
+        console.error('AI Plan Error:', err);
+        toast('Failed to generate plan: ' + err.message, 'danger');
+    } finally {
+        document.getElementById('aiLoading').style.display = 'none';
+        document.getElementById('aiGenerateBtn').disabled = false;
+        document.getElementById('aiGenerateBtn').innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate AI Trip Plan';
+    }
+}
+
+// ============================================================
+// GENERATE MOCK PLAN (No OpenAI Required)
+// ============================================================
+
+function generateMockPlan(destination, days, budget, travellers, interests) {
+    const cityData = {
+        'jaipur': {
+            places: ['Hawa Mahal', 'Nahargarh Fort', 'Jal Mahal', 'Amer Fort', 'City Palace', 'Jantar Mantar', 'Albert Hall Museum'],
+            food: ['Pyaaz Kachori', 'Dal Baati Churma', 'Ghewar', 'Laal Maas', 'Lassi', 'Mirchi Bada'],
+            tips: 'Bargain at Johari Bazaar, visit Amer Fort early morning, wear comfortable shoes'
+        },
+        'delhi': {
+            places: ['Red Fort', 'Qutub Minar', 'India Gate', 'Lotus Temple', 'Humayun\'s Tomb', 'Chandni Chowk'],
+            food: ['Chole Bhature', 'Butter Chicken', 'Jalebi', 'Chaat', 'Biryani'],
+            tips: 'Use Delhi Metro for cheap travel, try street food at night'
+        },
+        'goa': {
+            places: ['Baga Beach', 'Dudhsagar Falls', 'Basilica of Bom Jesus', 'Fort Aguada', 'Palolem Beach'],
+            food: ['Fish Curry Rice', 'Bebinca', 'Prawn Balchão', 'Feni', 'Goan Sausage'],
+            tips: 'Rent a scooter for ₹300-500/day, visit beaches early morning'
+        },
+        'mumbai': {
+            places: ['Gateway of India', 'Marine Drive', 'Elephanta Caves', 'Bandra-Worli Sea Link', 'Colaba Causeway'],
+            food: ['Vada Pav', 'Pav Bhaji', 'Bhel Puri', 'Pani Puri', 'Bombay Sandwich'],
+            tips: 'Use local trains for cheapest travel, carry umbrella in monsoon'
+        },
+        'kerala': {
+            places: ['Munnar Tea Gardens', 'Alleppey Backwaters', 'Periyar Wildlife Sanctuary', 'Kovalam Beach', 'Fort Kochi'],
+            food: ['Appam Stew', 'Puttu Kadala', 'Karimeen Fry', 'Payasam', 'Kerala Parotta'],
+            tips: 'Try houseboat stay in Alleppey, carry rain gear year-round'
+        },
+        'manali': {
+            places: ['Rohtang Pass', 'Solang Valley', 'Hadimba Temple', 'Old Manali', 'Jogini Falls'],
+            food: ['Thukpa', 'Momos', 'Sidu', 'Trout Fish', 'Chana Madra'],
+            tips: 'Carry warm clothes even in summer, book Rohtang permit in advance'
+        },
+        'udaipur': {
+            places: ['City Palace', 'Lake Pichola', 'Jag Mandir', 'Saheliyon ki Bari', 'Monsoon Palace'],
+            food: ['Dal Baati Churma', 'Laal Maas', 'Gatte ki Sabzi', 'Kachori', 'Rabdi'],
+            tips: 'Take sunset boat ride on Lake Pichola, visit City Palace early'
+        },
+        'agra': {
+            places: ['Taj Mahal', 'Agra Fort', 'Mehtab Bagh', 'Fatehpur Sikri', 'Itmad-ud-Daulah Tomb'],
+            food: ['Petha', 'Mughlai Cuisine', 'Bedai', 'Jalebi', 'Dalmoth'],
+            tips: 'Visit Taj at sunrise, carry water bottle, avoid touts'
+        },
+        'varanasi': {
+            places: ['Dashashwamedh Ghat', 'Kashi Vishwanath Temple', 'Sarnath', 'Assi Ghat', 'Manikarnika Ghat'],
+            food: ['Kachori Sabzi', 'Thandai', 'Chaat', 'Lassi', 'Tamatar Chaat'],
+            tips: 'Take boat ride at dawn for Ganga Aarti, respect local customs'
+        },
+        'rishikesh': {
+            places: ['Laxman Jhula', 'Ram Jhula', 'Triveni Ghat', 'Neelkanth Mahadev Temple', 'Beatles Ashram'],
+            food: ['Chole Bhature', 'Aloo Puri', 'Lassi', 'Italian', 'Thali'],
+            tips: 'Book rafting in advance, attend Ganga Aarti at Triveni Ghat'
+        }
+    };
+    
+    // Find city data
+    const cityKey = destination.toLowerCase();
+    let cityInfo = cityData[cityKey];
+    
+    if (!cityInfo) {
+        for (const [key, value] of Object.entries(cityData)) {
+            if (cityKey.includes(key) || key.includes(cityKey)) {
+                cityInfo = value;
+                break;
+            }
+        }
+    }
+    
+    if (!cityInfo) {
+        cityInfo = {
+            places: ['Heritage Sites', 'Local Markets', 'Temples', 'Gardens', 'Museums'],
+            food: ['Local Street Food', 'Traditional Dishes', 'Sweets', 'Beverages'],
+            tips: 'Ask locals for the best hidden gems, carry water bottle'
+        };
+    }
+    
+    const perDayBudget = Math.floor(budget / days);
+    const places = cityInfo.places;
+    const foods = cityInfo.food;
+    
+    let plan = `🌟 ${days}-Day Trip Plan for ${destination}\n`;
+    plan += `💰 Budget: ₹${budget.toLocaleString()} | 👥 ${travellers} Traveller${travellers > 1 ? 's' : ''}\n`;
+    plan += `📅 ${days} Days\n\n`;
+    plan += `═`.repeat(50) + '\n\n';
+    
+    for (let i = 0; i < days; i++) {
+        const dayNum = i + 1;
+        const place1 = places[i % places.length];
+        const place2 = places[(i + 1) % places.length];
+        const food = foods[i % foods.length];
+        const food2 = foods[(i + 1) % foods.length];
+        const cost = Math.floor(perDayBudget * (0.7 + Math.random() * 0.3));
+        
+        plan += `📅 Day ${dayNum}: ${destination} Exploration\n`;
+        plan += `🕐 7:00 AM - Morning walk & chai (₹50)\n`;
+        plan += `🕐 8:30 AM - Breakfast: ${food} (₹${Math.floor(cost * 0.15)})\n`;
+        plan += `🕐 10:00 AM - Visit ${place1} (Entry: ₹${Math.floor(cost * 0.25)})\n`;
+        plan += `🕐 1:00 PM - Lunch: Local thali (₹${Math.floor(cost * 0.2)})\n`;
+        plan += `🕐 3:00 PM - Explore ${place2} (Entry: ₹${Math.floor(cost * 0.2)})\n`;
+        plan += `🕐 6:00 PM - Evening walk & shopping (₹${Math.floor(cost * 0.1)})\n`;
+        plan += `🕐 8:00 PM - Dinner: ${food2} (₹${Math.floor(cost * 0.2)})\n`;
+        plan += `💸 Day ${dayNum} Total: ₹${cost.toLocaleString()}\n\n`;
+    }
+    
+    // Budget breakdown
+    plan += `═`.repeat(50) + '\n\n';
+    plan += `💰 Budget Breakdown for ${days} Days:\n`;
+    const accommodation = Math.floor(budget * 0.3);
+    const food = Math.floor(budget * 0.25);
+    const transport = Math.floor(budget * 0.2);
+    const activities = Math.floor(budget * 0.15);
+    const shopping = budget - accommodation - food - transport - activities;
+    
+    plan += `🏨 Accommodation: ₹${accommodation.toLocaleString()} (30%)\n`;
+    plan += `🍽️ Food: ₹${food.toLocaleString()} (25%)\n`;
+    plan += `🚗 Transport: ₹${transport.toLocaleString()} (20%)\n`;
+    plan += `🎯 Activities: ₹${activities.toLocaleString()} (15%)\n`;
+    plan += `🛍️ Shopping: ₹${shopping.toLocaleString()} (10%)\n\n`;
+    
+    // Food recommendations
+    plan += `═`.repeat(50) + '\n\n';
+    plan += `🍽️ Must-Try Foods in ${destination}:\n`;
+    foods.forEach((f, i) => {
+        plan += `${i + 1}. ${f}\n`;
+    });
+    plan += `\n`;
+    
+    // Places to visit
+    plan += `═`.repeat(50) + '\n\n';
+    plan += `📸 Top Places to Visit:\n`;
+    places.slice(0, 6).forEach((p, i) => {
+        plan += `${i + 1}. ${p}\n`;
+    });
+    plan += `\n`;
+    
+    // Tips
+    plan += `═`.repeat(50) + '\n\n';
+    plan += `💡 Travel Tips for ${destination}:\n`;
+    plan += `• ${cityInfo.tips}\n`;
+    plan += `• Carry water bottle to save money\n`;
+    plan += `• Book hotels in advance for best rates\n`;
+    plan += `• Use public transport over cabs (save 60-70%)\n`;
+    plan += `• Bargain at local markets (start at 40% of quoted price)\n`;
+    plan += `• Try street food for authentic taste at low prices\n\n`;
+    
+    plan += `═`.repeat(50) + '\n\n';
+    plan += `✅ ${destination} trip planned successfully! ✈️\n`;
+    plan += `💵 Total Budget: ₹${budget.toLocaleString()}\n`;
+    plan += `📅 Total Days: ${days}\n`;
+    plan += `💰 Per Day: ₹${perDayBudget.toLocaleString()}\n\n`;
+    plan += `📌 Pro Tip: Save 10-15% by booking everything in advance!`;
+    
+    return plan;
+}
+
+// ============================================================
+// AI PLAN HELPERS
+// ============================================================
+
+function fillExample(city) {
+    const examples = {
+        jaipur: { dest: 'Jaipur', days: 3, budget: 25000, interests: 'sightseeing, food, culture' },
+        goa: { dest: 'Goa', days: 5, budget: 40000, interests: 'beach, food, water sports' },
+        kerala: { dest: 'Kerala', days: 4, budget: 35000, interests: 'nature, food, backwaters' },
+        manali: { dest: 'Manali', days: 3, budget: 20000, interests: 'adventure, nature, trekking' }
+    };
+    
+    const ex = examples[city];
+    if (ex) {
+        document.getElementById('aiDestination').value = ex.dest;
+        document.getElementById('aiDays').value = ex.days;
+        document.getElementById('aiBudget').value = ex.budget;
+        document.getElementById('aiInterests').value = ex.interests;
+        generateAIPlan();
+    }
+}
+
+function copyAIPlan() {
+    const resultDiv = document.getElementById('aiResult');
+    const text = resultDiv.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        toast('📋 Plan copied to clipboard!', 'success');
+    }).catch(() => {
+        toast('Failed to copy', 'danger');
+    });
+}
+
+async function saveAIPlanToTrip() {
+    const data = window._aiPlanData;
+    if (!data) {
+        toast('No plan to save', 'warning');
+        return;
+    }
+    
+    const tripData = {
+        destination: data.destination,
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date(Date.now() + data.days * 86400000).toISOString().split('T')[0],
+        budget: data.budget,
+        travellers: 1,
+        travelType: 'Friends'
+    };
+    
+    try {
+        const trip = await tripsAPI.create(tripData);
+        state.trips.push(trip);
+        state.activeTripId = trip._id || trip.id;
+        saveState();
+        toast('✅ Trip created from AI plan!', 'success');
+        navigate('dashboard');
+    } catch (err) {
+        toast('Failed to create trip: ' + err.message, 'danger');
+    }
+}
+
+function shareAIPlan() {
+    const data = window._aiPlanData;
+    if (!data) return;
+    
+    const text = `🌟 AI Trip Plan: ${data.destination}\n\n${data.plan}`;
+    if (navigator.share) {
+        navigator.share({
+            title: `Trip Plan: ${data.destination}`,
+            text: text
+        }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(text).then(() => {
+            toast('📋 Plan copied to clipboard!', 'success');
+        });
+    }
+}
+
+// ============================================================
 // MAKE GLOBALLY AVAILABLE
 // ============================================================
 
@@ -619,5 +989,11 @@ window.shareViaWhatsApp = shareViaWhatsApp;
 window.shareViaEmail = shareViaEmail;
 window.shareViaTwitter = shareViaTwitter;
 window.downloadExcel = downloadExcel;
+window.renderAIPlanner = renderAIPlanner;
+window.generateAIPlan = generateAIPlan;
+window.fillExample = fillExample;
+window.copyAIPlan = copyAIPlan;
+window.saveAIPlanToTrip = saveAIPlanToTrip;
+window.shareAIPlan = shareAIPlan;
 
-console.log('✅ All Functions Loaded: PDF, Email, Share, Excel!');
+console.log('✅ All Functions Loaded: PDF, Email, Share, Excel, AI Planner!');

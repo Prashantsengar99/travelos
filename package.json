@@ -16,6 +16,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^7.5.0",
     "nodemailer": "^9.0.3",
+    "openai": "^6.46.0",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
